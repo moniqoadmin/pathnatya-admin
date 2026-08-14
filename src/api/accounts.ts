@@ -84,6 +84,51 @@ export interface BulkUploadResult {
   errors: BulkUploadError[]
 }
 
+export type AccountImportStatus = 'queued' | 'processing' | 'completed' | 'failed'
+
+export interface AccountImportAccepted {
+  jobId: string
+  status: AccountImportStatus
+}
+
+export interface AccountImportJob {
+  id: string
+  status: AccountImportStatus
+  fileName: string
+  fileSize: number
+  totalRows: number
+  createdCount: number
+  failedCount: number
+  failureMessage: string | null
+  startedAt: string | null
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AccountImportError {
+  id: string
+  rowNumber: number
+  sn: string | null
+  country: string | null
+  sanghat: string | null
+  jilha: string | null
+  taluka: string | null
+  group: string | null
+  kendra: string | null
+  sanchalakName: string | null
+  phoneNumber: string | null
+  error: string
+}
+
+export interface AccountImportErrorsPage {
+  data: AccountImportError[]
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
 export interface ListAccountsQuery {
   page?: number
   limit?: number
@@ -179,14 +224,35 @@ export function updateAccount(
 export function bulkUploadAccounts(
   file: File,
   authToken: string,
-): Promise<BulkUploadResult> {
+): Promise<AccountImportAccepted> {
   const formData = new FormData()
   formData.append('file', file)
-  return apiFetch<BulkUploadResult>('/accounts/bulk/upload', {
+  return apiFetch<AccountImportAccepted>('/accounts/bulk/upload', {
     method: 'POST',
     authToken,
     body: formData,
   })
+}
+
+export function getAccountImportJob(
+  jobId: string,
+  authToken: string,
+): Promise<AccountImportJob> {
+  return apiFetch<AccountImportJob>(`/accounts/bulk/upload/${jobId}`, {
+    authToken,
+  })
+}
+
+export function getAccountImportErrors(
+  jobId: string,
+  page: number,
+  limit: number,
+  authToken: string,
+): Promise<AccountImportErrorsPage> {
+  return apiFetch<AccountImportErrorsPage>(
+    `/accounts/bulk/upload/${jobId}/errors?page=${page}&limit=${limit}`,
+    { authToken },
+  )
 }
 
 export function setPassword(

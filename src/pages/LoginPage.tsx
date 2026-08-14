@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkPhone, getLoginTokens, login } from '../api/accounts'
+import type { ApiError } from '../api/client'
 import PasswordInput from '../components/PasswordInput'
 import { getDeviceId } from '../lib/device-id'
 import { canAccessAdmin, normalizeRole } from '../lib/roles'
@@ -12,6 +13,19 @@ import {
 } from '../lib/session'
 
 type Step = 'phone' | 'password'
+
+function loginErrorMessage(error: unknown, fallback: string): string {
+  const apiError = error as ApiError
+  if (apiError?.status === 429) {
+    return `Too many login attempts. Please try again in ${apiError.retryAfterSeconds ?? 60} seconds.`
+  }
+  if (apiError?.status === 503) {
+    return 'Many users are logging in right now. Please try again in a few seconds.'
+  }
+  return error instanceof Error && error.message.trim()
+    ? error.message.trim()
+    : fallback
+}
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -51,11 +65,7 @@ export default function LoginPage() {
       setPhoneNumber(trimmed)
       setStep('password')
     } catch (err) {
-      const message =
-        err instanceof Error && err.message.trim()
-          ? err.message.trim()
-          : 'Unable to verify phone number. Please try again.'
-      setError(message)
+      setError(loginErrorMessage(err, 'Unable to verify phone number. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -102,11 +112,7 @@ export default function LoginPage() {
       clearPendingPhone()
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      const message =
-        err instanceof Error && err.message.trim()
-          ? err.message.trim()
-          : 'Invalid phone number or password. Please try again.'
-      setError(message)
+      setError(loginErrorMessage(err, 'Invalid phone number or password. Please try again.'))
     } finally {
       setLoading(false)
     }

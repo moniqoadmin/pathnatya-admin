@@ -863,6 +863,89 @@ select {
   margin-top: 0;
 }
 
+.bulk-file-help {
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.bulk-import-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.status-pill.status-queued,
+.status-pill.status-processing {
+  color: #e8d7a8;
+  border-color: rgba(196, 163, 90, 0.4);
+  background: rgba(196, 163, 90, 0.16);
+}
+
+.status-pill.status-completed {
+  color: #c5e4d6;
+  border-color: rgba(98, 168, 146, 0.4);
+  background: rgba(62, 120, 104, 0.2);
+}
+
+.status-pill.status-failed {
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.bulk-progress-block {
+  margin-bottom: 18px;
+}
+
+.bulk-progress-block p {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.bulk-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bulk-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 240ms ease;
+}
+
+.bulk-progress-track span.is-indeterminate {
+  width: 35%;
+  animation: bulk-progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+.bulk-error-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+@keyframes bulk-progress-indeterminate {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
 .bulk-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

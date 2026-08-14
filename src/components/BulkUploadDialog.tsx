@@ -1,303 +1,272 @@
-import { type ChangeEvent, useRef, useState } from 'react'
+import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import {
   bulkUploadAccounts,
+  getAccountImportErrors,
+  getAccountImportJob,
+  type AccountImportError,
+  type AccountImportErrorsPage,
+  type AccountImportJob,
   type BulkUploadError,
-  type BulkUploadResult,
 } from '../api/accounts'
+import type { ApiError } from '../api/client'
 import { downloadBulkErrorsCsv } from '../lib/csv'
 import { getToken } from '../lib/session'
 import Modal from './Modal'
 
 const EXCEL_ACCEPT =
-  '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel'
+  '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+const MAX_FILE_BYTES = 20 * 1024 * 1024
+const POLL_INTERVAL_MS = 2_500
+const ACTIVE_JOB_KEY = 'pathnatya.activeAccountImportJobId'
 
 interface BulkUploadDialogProps {
   onClose: () => void
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value) {
-    return null
-  }
-  if (typeof value === 'string') {
-    try {
-      return asRecord(JSON.parse(value))
-    } catch {
-      return null
-    }
-  }
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-  return null
-}
-
-function readNumber(...values: unknown[]): number | null {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value
-    }
-    if (typeof value === 'string' && value.trim() !== '') {
-      const parsed = Number(value)
-      if (Number.isFinite(parsed)) {
-        return parsed
-      }
-    }
-  }
-  return null
-}
-
-function readErrors(value: unknown): BulkUploadError[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  return value.map((item, index) => {
-    const row = asRecord(item) ?? {}
-    return {
-      row: readNumber(row.row, row.rowNumber, row.row_number) ?? index + 1,
-      sn: (row.sn as string | null | undefined) ?? null,
-      country: (row.country as string | null | undefined) ?? null,
-      sanghat: (row.sanghat as string | null | undefined) ?? null,
-      jilha: (row.jilha as string | null | undefined) ?? null,
-      taluka: (row.taluka as string | null | undefined) ?? null,
-      group: (row.group as string | null | undefined) ?? null,
-      kendra: (row.kendra as string | null | undefined) ?? null,
-      sanchalakName:
-        (row.sanchalakName as string | null | undefined) ??
-        (row.sanchalak_name as string | null | undefined) ??
-        null,
-      phoneNumber:
-        (row.phoneNumber as string | null | undefined) ??
-        (row.phone_number as string | null | undefined) ??
-        null,
-      error: String(row.error ?? row.message ?? 'Unknown error'),
-    }
-  })
-}
-
-function unwrapUploadPayload(value: unknown): Record<string, unknown> | null {
-  const root = asRecord(value)
-  if (!root) {
-    return null
-  }
-
-  let current: Record<string, unknown> = root
-
-  for (let depth = 0; depth < 4; depth += 1) {
-    if (
-      'totalRows' in current ||
-      'total_rows' in current ||
-      'created' in current ||
-      'failed' in current ||
-      'errors' in current
-    ) {
-      return current
-    }
-
-    const nestedCandidate: Record<string, unknown> | null =
-      asRecord(current.data) ??
-      asRecord(current.result) ??
-      asRecord(current.body) ??
-      asRecord(current.payload)
-
-    if (!nestedCandidate) {
-      return current
-    }
-    current = nestedCandidate
-  }
-
-  return current
-}
-
-function asBulkUploadResult(value: unknown): BulkUploadResult | null {
-  const nested = unwrapUploadPayload(value)
-  if (!nested) {
-    return null
-  }
-
-  const errors = readErrors(nested.errors)
-  const created = readNumber(nested.created) ?? 0
-  const failed = readNumber(nested.failed) ?? errors.length
-  const totalRows = readNumber(nested.totalRows, nested.total_rows) ?? created + failed
-
-  if (totalRows === 0 && created === 0 && failed === 0 && errors.length === 0) {
-    return null
-  }
-
+function toBulkError(item: AccountImportError): BulkUploadError {
   return {
-    totalRows,
-    created,
-    failed: Math.max(failed, errors.length),
-    errors,
+    row: item.rowNumber,
+    sn: item.sn,
+    country: item.country,
+    sanghat: item.sanghat,
+    jilha: item.jilha,
+    taluka: item.taluka,
+    group: item.group,
+    kendra: item.kendra,
+    sanchalakName: item.sanchalakName,
+    phoneNumber: item.phoneNumber,
+    error: item.error,
   }
 }
 
-function thrownData(err: unknown): unknown {
-  if (err && typeof err === 'object' && 'data' in err) {
-    return (err as { data: unknown }).data
+function apiErrorMessage(error: unknown, fallback: string): string {
+  const apiError = error as ApiError
+  if (apiError?.status === 413) return 'The Excel file exceeds the 20 MB limit.'
+  if (apiError?.status === 429) {
+    return `Too many requests. Please try again in ${apiError.retryAfterSeconds ?? 60} seconds.`
   }
-  return null
-}
-
-function errorKey(item: BulkUploadError, index: number): string {
-  return `${item.row}-${item.phoneNumber ?? 'unknown'}-${index}`
+  if (apiError?.status === 503) {
+    return 'The import service is temporarily busy. Please try again shortly.'
+  }
+  return error instanceof Error && error.message.trim()
+    ? error.message.trim()
+    : fallback
 }
 
 export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
+  const [jobId, setJobId] = useState(
+    () => sessionStorage.getItem(ACTIVE_JOB_KEY) ?? '',
+  )
+  const [job, setJob] = useState<AccountImportJob | null>(null)
+  const [errorsPage, setErrorsPage] = useState<AccountImportErrorsPage | null>(null)
+  const [errorPageNumber, setErrorPageNumber] = useState(1)
   const [error, setError] = useState('')
-  const [result, setResult] = useState<BulkUploadResult | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
-  const errors = result?.errors ?? []
-  const failedCount = result ? Math.max(result.failed, errors.length) : 0
-  const hasErrors = failedCount > 0
-  const hasResult = result !== null
+  const active = jobId !== '' && job?.status !== 'completed' && job?.status !== 'failed'
+  const busy = uploading || active
+  const processed = (job?.createdCount ?? 0) + (job?.failedCount ?? 0)
+  const percentage = job?.totalRows
+    ? Math.min(100, Math.round((processed / job.totalRows) * 100))
+    : 0
+
+  useEffect(() => {
+    if (!jobId || job?.status === 'completed' || job?.status === 'failed') return
+    let cancelled = false
+    let timer: number | undefined
+
+    async function poll() {
+      const token = getToken()
+      if (!token) {
+        setError('Your session expired. Please log in again.')
+        return
+      }
+      try {
+        const next = await getAccountImportJob(jobId, token)
+        if (cancelled) return
+        setJob(next)
+        setError('')
+        if (next.status === 'completed' || next.status === 'failed') {
+          sessionStorage.removeItem(ACTIVE_JOB_KEY)
+          if (next.failedCount > 0) {
+            const page = await getAccountImportErrors(jobId, 1, 100, token)
+            if (!cancelled) {
+              setErrorsPage(page)
+              setErrorPageNumber(1)
+            }
+          }
+          return
+        }
+        timer = window.setTimeout(poll, POLL_INTERVAL_MS)
+      } catch (pollError) {
+        if (!cancelled) {
+          setError(apiErrorMessage(pollError, 'Unable to check the import status.'))
+          timer = window.setTimeout(poll, POLL_INTERVAL_MS * 2)
+        }
+      }
+    }
+
+    void poll()
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [jobId, job?.status])
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null
     event.target.value = ''
-    setFile(next)
     setError('')
-    setResult(null)
+    setJob(null)
+    setErrorsPage(null)
+    setJobId('')
+
+    if (!next) {
+      setFile(null)
+      return
+    }
+    if (!next.name.toLowerCase().endsWith('.xlsx')) {
+      setFile(null)
+      setError('Please select an Excel .xlsx file.')
+      return
+    }
+    if (next.size === 0 || next.size > MAX_FILE_BYTES) {
+      setFile(null)
+      setError('Please select a non-empty Excel file smaller than 20 MB.')
+      return
+    }
+    setFile(next)
   }
 
   async function handleUpload() {
     setError('')
-
     if (!file) {
       setError('Please select an Excel file to upload.')
       return
     }
-
     const token = getToken()
     if (!token) {
       setError('Your session expired. Please log in again.')
       return
     }
 
-    setLoading(true)
+    setUploading(true)
     try {
-      const uploadResult = await bulkUploadAccounts(file, token)
-      const parsed = asBulkUploadResult(uploadResult)
-      if (!parsed) {
-        setError(
-          'Upload finished, but the server did not return a usable summary. Please try again.',
-        )
-        return
-      }
-      setResult(parsed)
-    } catch (err) {
-      const fromThrow = asBulkUploadResult(thrownData(err))
-      if (fromThrow) {
-        setResult(fromThrow)
-        return
-      }
-
-      setError(
-        err instanceof Error && err.message.trim()
-          ? err.message.trim()
-          : 'Unable to upload the Excel file. Please try again.',
-      )
+      const accepted = await bulkUploadAccounts(file, token)
+      setJobId(accepted.jobId)
+      sessionStorage.setItem(ACTIVE_JOB_KEY, accepted.jobId)
+      setJob(null)
+    } catch (uploadError) {
+      setError(apiErrorMessage(uploadError, 'Unable to upload the Excel file.'))
     } finally {
-      setLoading(false)
+      setUploading(false)
     }
   }
 
+  async function changeErrorPage(page: number) {
+    if (!jobId) return
+    const token = getToken()
+    if (!token) return
+    try {
+      const next = await getAccountImportErrors(jobId, page, 100, token)
+      setErrorsPage(next)
+      setErrorPageNumber(page)
+    } catch (pageError) {
+      setError(apiErrorMessage(pageError, 'Unable to load failed rows.'))
+    }
+  }
+
+  async function downloadAllErrors() {
+    if (!jobId || !job?.failedCount) return
+    const token = getToken()
+    if (!token) return
+    setDownloading(true)
+    try {
+      const collected: BulkUploadError[] = []
+      let page = 1
+      let totalPages = 1
+      do {
+        const result = await getAccountImportErrors(jobId, page, 100, token)
+        collected.push(...result.data.map(toBulkError))
+        totalPages = result.totalPages
+        page += 1
+      } while (page <= totalPages)
+      downloadBulkErrorsCsv(collected)
+    } catch (downloadError) {
+      setError(apiErrorMessage(downloadError, 'Unable to download failed rows.'))
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  function reset() {
+    sessionStorage.removeItem(ACTIVE_JOB_KEY)
+    setFile(null)
+    setJobId('')
+    setJob(null)
+    setErrorsPage(null)
+    setError('')
+  }
+
+  const hasResult = job?.status === 'completed' || job?.status === 'failed'
+  const title = hasResult
+    ? job.status === 'completed'
+      ? 'Bulk upload complete'
+      : 'Bulk upload failed'
+    : jobId
+      ? 'Importing accounts'
+      : 'Bulk upload accounts'
+
   return (
     <Modal
-      title={hasErrors ? 'Bulk upload errors' : hasResult ? 'Bulk upload complete' : 'Bulk upload accounts'}
+      title={title}
       description={
-        hasErrors
-          ? 'Some rows could not be created. Review the summary below or download the errors as a CSV.'
-          : hasResult
-            ? 'Accounts were created from the Excel file.'
-            : 'Select an Excel file (.xlsx) in the nivedan or accounts template format. Duplicate or invalid mobile numbers are skipped and listed after upload.'
+        jobId
+          ? 'The import continues in the background. You may close this window and return later.'
+          : 'Select an Excel .xlsx file in the nivedan or accounts template format.'
       }
       labelledBy="bulk-upload-title"
-      busy={loading}
-      wide={hasResult}
-      dismissible={!hasResult}
+      busy={busy}
+      wide={Boolean(jobId)}
+      dismissible
       onClose={onClose}
       footer={
         <div className="modal-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
-            {hasResult ? 'Close' : 'Cancel'}
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            Close
           </button>
-          {hasErrors ? (
+          {hasResult && (
+            <button type="button" className="btn btn-secondary" onClick={reset}>
+              Upload another file
+            </button>
+          )}
+          {job?.status === 'completed' && job.failedCount > 0 && (
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => downloadBulkErrorsCsv(errors)}
+              onClick={() => void downloadAllErrors()}
+              disabled={downloading}
             >
-              Download errors CSV
+              {downloading ? 'Preparing CSV…' : 'Download errors CSV'}
             </button>
-          ) : !hasResult ? (
+          )}
+          {!jobId && (
             <button
               type="button"
               className="btn btn-primary"
               onClick={() => void handleUpload()}
-              disabled={loading}
+              disabled={uploading || !file}
             >
-              {loading ? 'Uploading...' : 'Upload'}
+              {uploading ? 'Uploading…' : 'Upload'}
             </button>
-          ) : null}
+          )}
         </div>
       }
     >
-      {hasResult && result ? (
-        <div className="bulk-error-panel">
-          <div className="bulk-summary-grid">
-            <div className="bulk-summary-item">
-              <span className="bulk-summary-label">Total rows</span>
-              <span className="bulk-summary-value">{result.totalRows}</span>
-            </div>
-            <div className="bulk-summary-item">
-              <span className="bulk-summary-label">Created</span>
-              <span className="bulk-summary-value">{result.created}</span>
-            </div>
-            <div className="bulk-summary-item is-danger">
-              <span className="bulk-summary-label">Failed</span>
-              <span className="bulk-summary-value">{failedCount}</span>
-            </div>
-          </div>
-
-          <p className={hasErrors ? 'form-error' : 'form-success'}>
-            {hasErrors
-              ? `${failedCount} of ${result.totalRows} rows failed. Download the CSV to review and fix them.`
-              : `Successfully created ${result.created} account${result.created === 1 ? '' : 's'}.`}
-          </p>
-
-          {hasErrors && (
-            <div className="bulk-error-table-wrap">
-              <table className="bulk-error-table">
-                <thead>
-                  <tr>
-                    <th>Row</th>
-                    <th>SN</th>
-                    <th>Mobile</th>
-                    <th>Name</th>
-                    <th>Error</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {errors.map((item, index) => (
-                    <tr key={errorKey(item, index)}>
-                      <td>{item.row}</td>
-                      <td>{item.sn ?? '—'}</td>
-                      <td>{item.phoneNumber ?? '—'}</td>
-                      <td>{item.sanchalakName ?? '—'}</td>
-                      <td>{item.error}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      ) : (
+      {!jobId ? (
         <div className="stack-form">
           <input
             ref={fileInputRef}
@@ -306,20 +275,129 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
             hidden
             onChange={handleFileChange}
           />
-
           <div className="file-picker">
             <button
               type="button"
               className="btn btn-secondary"
               onClick={() => fileInputRef.current?.click()}
-              disabled={loading}
+              disabled={uploading}
             >
               Choose Excel file
             </button>
             <p className="file-picker-name">{file ? file.name : 'No file selected'}</p>
           </div>
-
+          <p className="bulk-file-help">Maximum file size: 20 MB</p>
           {error && <p className="form-error">{error}</p>}
+        </div>
+      ) : (
+        <div className="bulk-error-panel">
+          <div className="bulk-import-status-row">
+            <span className={`status-pill status-${job?.status ?? 'queued'}`}>
+              {job?.status ?? 'queued'}
+            </span>
+            <span>{job?.fileName ?? file?.name ?? 'Excel import'}</span>
+          </div>
+
+          {!hasResult && (
+            <div className="bulk-progress-block">
+              <div className="bulk-progress-track" aria-label="Import progress">
+                <span
+                  className={job?.totalRows ? '' : 'is-indeterminate'}
+                  style={job?.totalRows ? { width: `${percentage}%` } : undefined}
+                />
+              </div>
+              <p>
+                {job?.totalRows
+                  ? `Processed ${processed.toLocaleString()} of ${job.totalRows.toLocaleString()} rows (${percentage}%)`
+                  : job?.status === 'processing'
+                    ? 'Reading and validating the Excel file…'
+                    : 'Waiting for an import worker…'}
+              </p>
+            </div>
+          )}
+
+          {job && (
+            <div className="bulk-summary-grid">
+              <div className="bulk-summary-item">
+                <span className="bulk-summary-label">Total rows</span>
+                <span className="bulk-summary-value">{job.totalRows.toLocaleString()}</span>
+              </div>
+              <div className="bulk-summary-item">
+                <span className="bulk-summary-label">Created</span>
+                <span className="bulk-summary-value">{job.createdCount.toLocaleString()}</span>
+              </div>
+              <div className="bulk-summary-item is-danger">
+                <span className="bulk-summary-label">Failed</span>
+                <span className="bulk-summary-value">{job.failedCount.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+
+          {job?.status === 'completed' && (
+            <p className={job.failedCount > 0 ? 'form-error' : 'form-success'}>
+              {job.failedCount > 0
+                ? `${job.failedCount.toLocaleString()} rows failed. Review them below or download the CSV.`
+                : `Successfully created ${job.createdCount.toLocaleString()} accounts.`}
+            </p>
+          )}
+          {job?.status === 'failed' && (
+            <p className="form-error">
+              {job.failureMessage ?? 'The import could not be completed.'}
+            </p>
+          )}
+          {error && <p className="form-error">{error}</p>}
+
+          {errorsPage && errorsPage.data.length > 0 && (
+            <>
+              <div className="bulk-error-table-wrap">
+                <table className="bulk-error-table">
+                  <thead>
+                    <tr>
+                      <th>Row</th>
+                      <th>Mobile</th>
+                      <th>Kendra</th>
+                      <th>Sanghat</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {errorsPage.data.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.rowNumber}</td>
+                        <td>{item.phoneNumber ?? '—'}</td>
+                        <td>{item.kendra ?? '—'}</td>
+                        <td>{item.sanghat ?? '—'}</td>
+                        <td>{item.error}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {errorsPage.totalPages > 1 && (
+                <div className="bulk-error-pagination">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={errorPageNumber <= 1}
+                    onClick={() => void changeErrorPage(errorPageNumber - 1)}
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {errorPageNumber} of {errorsPage.totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={errorPageNumber >= errorsPage.totalPages}
+                    onClick={() => void changeErrorPage(errorPageNumber + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </Modal>
