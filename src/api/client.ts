@@ -7,6 +7,12 @@ export type ApiFetchOptions = RequestInit & {
   authToken?: string
 }
 
+export type ApiError = Error & {
+  status?: number
+  data?: unknown
+  retryAfterSeconds?: number
+}
+
 function errorMessage(data: unknown, fallback: string): string {
   if (data && typeof data === 'object' && 'message' in data) {
     const message = (data as { message: unknown }).message
@@ -62,9 +68,16 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const envelope = await res.json()
   const data = await readResponseBody<T>(envelope)
   if (!res.ok) {
+    const retryAfterHeader = Number(res.headers.get('Retry-After'))
+    const retryAfterBody =
+      data && typeof data === 'object' && 'retryAfterSeconds' in data
+        ? Number((data as { retryAfterSeconds: unknown }).retryAfterSeconds)
+        : 0
     throw Object.assign(new Error(errorMessage(data, 'API error')), {
       status: res.status,
       data,
+      retryAfterSeconds:
+        retryAfterHeader > 0 ? retryAfterHeader : retryAfterBody || undefined,
     })
   }
 
