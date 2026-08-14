@@ -64,6 +64,10 @@ export function canEditPrivilegedAccountFields(role: string | null | undefined):
   return normalized === 'superadmin' || normalized === 'developer'
 }
 
+export function canResolveIssues(role: string | null | undefined): boolean {
+  return canEditPrivilegedAccountFields(role)
+}
+
 export function getNavItemsForRole(role: string | null | undefined): NavItem[] {
   const normalized = normalizeRole(role)
   if (!normalized || normalized === 'user') {
