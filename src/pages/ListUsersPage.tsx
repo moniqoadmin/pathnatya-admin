@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type KeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { getAccountRoles, listAccounts, type Account } from '../api/accounts'
-import EditAccountDialog from '../components/EditAccountDialog'
-import { canEditPrivilegedAccountFields, isSuperAdmin } from '../lib/roles'
+import AccountDetails from '../components/AccountDetails'
+import { canEditAccount, canEditPrivilegedAccountFields, isSuperAdmin } from '../lib/roles'
 import { getAccount, getToken } from '../lib/session'
 
 const PAGE_SIZE = 20
@@ -31,9 +31,42 @@ function parsePage(value: string | null): number {
   return Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1
 }
 
+function loggedInTeamCount(account: Account): number {
+  return account.teams?.length ?? 0
+}
+
+function latestLoginTime(account: Account): string | null {
+  if (account.lastLoginTime) {
+    return account.lastLoginTime
+  }
+
+  const times = (account.teams ?? [])
+    .map((team) => team.lastLoginTime)
+    .filter((value): value is string => Boolean(value))
+
+  if (times.length === 0) {
+    return null
+  }
+
+  return times.reduce((latest, time) =>
+    new Date(time).getTime() > new Date(latest).getTime() ? time : latest,
+  )
+}
+
+function accountStatus(account: Account): { label: string; className: string } {
+  if (account.status) {
+    return { label: account.status, className: `status-${account.status}` }
+  }
+  if (account.isOffline) {
+    return { label: 'Offline', className: 'status-inactive' }
+  }
+  return { label: 'Online', className: 'status-active' }
+}
+
 export default function ListUsersPage() {
   const account = getAccount()
   const canFilterRoles = isSuperAdmin(account?.role)
+  const canEdit = canEditAccount(account?.role)
   const canEditPrivileged = canEditPrivilegedAccountFields(account?.role)
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -49,7 +82,7 @@ export default function ListUsersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null)
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
 
   useEffect(() => {
     if (!canFilterRoles) {
@@ -194,6 +227,42 @@ export default function ListUsersPage() {
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const to = Math.min(page * PAGE_SIZE, total)
 
+  function openDetails(row: Account) {
+    setStatus('')
+    setSelectedAccount(row)
+  }
+
+  function handleRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement>,
+    row: Account,
+  ) {
+    if (event.target instanceof HTMLElement && event.target.closest('button')) {
+      return
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openDetails(row)
+    }
+  }
+
+  if (selectedAccount) {
+    return (
+      <AccountDetails
+        account={selectedAccount}
+        canEdit={canEdit}
+        canEditPrivileged={canEditPrivileged}
+        onBack={() => setSelectedAccount(null)}
+        onUpdated={(updated, message) => {
+          setSelectedAccount(updated)
+          setRows((current) =>
+            current.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)),
+          )
+          setStatus(message)
+        }}
+      />
+    )
+  }
+
   return (
     <div className="page-panel users-page">
       <div className="page-header">
@@ -249,6 +318,8 @@ export default function ListUsersPage() {
               <th>Sanghat</th>
               <th>Jilha</th>
               <th>Kendra</th>
+              <th>Teams</th>
+              <th>Logged in</th>
               <th>Last login</th>
               <th>Actions</th>
             </tr>
@@ -256,45 +327,56 @@ export default function ListUsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="users-table-empty">
+                <td colSpan={11} className="users-table-empty">
                   Loading accounts...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="users-table-empty">
+                <td colSpan={11} className="users-table-empty">
                   No accounts found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{formatValue(row.phoneNumber)}</td>
-                  <td>{formatValue(row.sanchalakName)}</td>
-                  <td>{formatValue(row.role)}</td>
-                  <td>
-                    <span className={`status-pill status-${row.status || 'unknown'}`}>
-                      {formatValue(row.status)}
-                    </span>
-                  </td>
-                  <td>{formatValue(row.sanghat)}</td>
-                  <td>{formatValue(row.jilha)}</td>
-                  <td>{formatValue(row.kendra)}</td>
-                  <td>{formatDate(row.lastLoginTime)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-compact"
-                      onClick={() => {
-                        setStatus('')
-                        setEditingAccount(row)
-                      }}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))
+              rows.map((row) => {
+                const status = accountStatus(row)
+                return (
+                  <tr
+                    key={row.id}
+                    className="is-clickable"
+                    tabIndex={0}
+                    onClick={() => openDetails(row)}
+                    onKeyDown={(event) => handleRowKeyDown(event, row)}
+                  >
+                    <td>{formatValue(row.phoneNumber)}</td>
+                    <td>{formatValue(row.sanchalakName)}</td>
+                    <td>{formatValue(row.role)}</td>
+                    <td>
+                      <span className={`status-pill ${status.className}`}>
+                        {status.label}
+                      </span>
+                    </td>
+                    <td>{formatValue(row.sanghat)}</td>
+                    <td>{formatValue(row.jilha)}</td>
+                    <td>{formatValue(row.kendra)}</td>
+                    <td>{formatValue(row.numberOfTeams)}</td>
+                    <td>{loggedInTeamCount(row)}</td>
+                    <td>{formatDate(latestLoginTime(row))}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-compact"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openDetails(row)
+                        }}
+                      >
+                        Go to
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
@@ -327,20 +409,6 @@ export default function ListUsersPage() {
         </div>
       </div>
 
-      {editingAccount && (
-        <EditAccountDialog
-          account={editingAccount}
-          canEditPrivileged={canEditPrivileged}
-          onClose={() => setEditingAccount(null)}
-          onUpdated={(updated, message) => {
-            setRows((current) =>
-              current.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)),
-            )
-            setEditingAccount(null)
-            setStatus(message)
-          }}
-        />
-      )}
     </div>
   )
 }

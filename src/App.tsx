@@ -3,10 +3,8 @@ import AppLayout from './components/AppLayout'
 import RequireRole from './components/RequireRole'
 import CreationPage from './pages/CreationPage'
 import DashboardPage from './pages/DashboardPage'
-import ListIssuesPage from './pages/ListIssuesPage'
 import ListUsersPage from './pages/ListUsersPage'
 import LoginPage from './pages/LoginPage'
-import ReportIssuePage from './pages/ReportIssuePage'
 import SetPasswordPage from './pages/SetPasswordPage'
 import { canAccessAdmin } from './lib/roles'
 import { clearSession, getAccount, isAuthenticated } from './lib/session'
@@ -51,8 +49,6 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/creation" element={<CreationPage />} />
               <Route path="/users" element={<ListUsersPage />} />
-              <Route path="/report-issue" element={<ReportIssuePage />} />
-              <Route path="/issues" element={<ListIssuesPage />} />
             </Route>
           </Route>
         </Route>

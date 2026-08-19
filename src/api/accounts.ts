@@ -5,11 +5,28 @@ export interface CheckPhoneResponse {
   needsPassword: boolean
 }
 
+export interface AccountTeam {
+  id: string
+  accountId: string
+  teamNumber: number
+  setPassword: boolean
+  isLoginDisabled: boolean
+  systemAddress?: string | null
+  metadata?: Record<string, unknown> | null
+  lastLoginTime?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface AccountTeamsResponse {
+  teams: AccountTeam[]
+}
+
 export interface Account {
   id: string
   phoneNumber: string
-  setPassword: boolean
-  status: string
+  setPassword?: boolean
+  status?: string
   role?: string
   country: string | null
   sanghat: string | null
@@ -18,15 +35,19 @@ export interface Account {
   group: string | null
   kendra: string | null
   sanchalakName: string | null
-  ipAddress: string | null
+  ipAddress?: string | null
   numberOfTeams?: number | null
+  numberOfReboot?: number | null
   systemAddress?: string[] | null
   metadata: Record<string, unknown> | null
-  lastLoginTime: string | null
+  lastLoginTime?: string | null
   createdAt: string
   updatedAt: string
   isOffline?: boolean
   isLoginDisabled?: boolean
+  logoutButton?: boolean
+  appConfiguration?: number | null
+  teams?: AccountTeam[]
   domSecurity?: boolean
   chokidar?: boolean
 }
@@ -155,6 +176,105 @@ export function checkPhone(phoneNumber: string): Promise<CheckPhoneResponse> {
   })
 }
 
+function unwrapAccountsList(body: unknown): PaginatedAccountsResponse {
+  if (!body || typeof body !== 'object') {
+    throw new Error('Unable to load accounts.')
+  }
+
+  const outer = body as { data?: unknown; page?: number; limit?: number; total?: number; totalPages?: number }
+  const nested =
+    outer.data && typeof outer.data === 'object' && !Array.isArray(outer.data)
+      ? (outer.data as PaginatedAccountsResponse)
+      : null
+
+  const page = nested && Array.isArray(nested.data) ? nested : (outer as PaginatedAccountsResponse)
+  if (!Array.isArray(page.data)) {
+    throw new Error('Unable to load accounts.')
+  }
+
+  return page
+}
+
+function unwrapAccountTeams(body: unknown): AccountTeam[] {
+  if (Array.isArray(body)) {
+    return body as AccountTeam[]
+  }
+
+  if (!body || typeof body !== 'object') {
+    throw new Error('Unable to load teams.')
+  }
+
+  const outer = body as { teams?: unknown; data?: unknown }
+  if (Array.isArray(outer.teams)) {
+    return outer.teams as AccountTeam[]
+  }
+
+  if (Array.isArray(outer.data)) {
+    return outer.data as AccountTeam[]
+  }
+
+  if (outer.data && typeof outer.data === 'object') {
+    const nested = outer.data as { teams?: unknown }
+    if (Array.isArray(nested.teams)) {
+      return nested.teams as AccountTeam[]
+    }
+  }
+
+  throw new Error('Unable to load teams.')
+}
+
+export function getAccountTeams(
+  accountId: string,
+  authToken: string,
+): Promise<AccountTeam[]> {
+  return apiFetch<unknown>(`/accounts/${accountId}/teams`, {
+    authToken,
+  }).then(unwrapAccountTeams)
+}
+
+export interface UpdateAccountTeamPayload {
+  setPassword?: boolean
+  isLoginDisabled?: boolean
+}
+
+function unwrapAccountTeam(body: unknown): AccountTeam | null {
+  if (!body || typeof body !== 'object') {
+    return null
+  }
+
+  const outer = body as { team?: unknown; data?: unknown }
+  const candidates = [body, outer.team, outer.data]
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      continue
+    }
+    if ('id' in candidate && 'teamNumber' in candidate) {
+      return candidate as AccountTeam
+    }
+    const nested = candidate as { team?: unknown }
+    if (nested.team && typeof nested.team === 'object' && 'id' in nested.team) {
+      return nested.team as AccountTeam
+    }
+  }
+
+  return null
+}
+
+export async function updateAccountTeam(
+  accountId: string,
+  teamId: string,
+  payload: UpdateAccountTeamPayload,
+  authToken: string,
+): Promise<AccountTeam | null> {
+  const data = await apiFetch<unknown>(`/accounts/${accountId}/teams/${teamId}`, {
+    method: 'PATCH',
+    authToken,
+    json: payload,
+  })
+  return unwrapAccountTeam(data)
+}
+
 export function listAccounts(
   query: ListAccountsQuery,
   authToken: string,
@@ -168,9 +288,9 @@ export function listAccounts(
   if (query.role?.trim()) {
     params.set('role', query.role.trim())
   }
-  return apiFetch<PaginatedAccountsResponse>(`/accounts?${params.toString()}`, {
+  return apiFetch<unknown>(`/accounts?${params.toString()}`, {
     authToken,
-  })
+  }).then(unwrapAccountsList)
 }
 
 export function getAccountRoles(authToken: string): Promise<string[]> {
@@ -183,9 +303,12 @@ export interface UpdateAccountPayload {
   setPassword?: boolean
   isOffline?: boolean
   isLoginDisabled?: boolean
+  logoutButton?: boolean
   domSecurity?: boolean
   chokidar?: boolean
   numberOfTeams?: number
+  numberOfReboot?: number
+  appConfiguration?: number
   status?: string
   role?: AccountRoleValue
   country?: string
