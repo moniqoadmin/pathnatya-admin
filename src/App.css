@@ -625,6 +625,59 @@ select {
   padding-top: 4px;
 }
 
+.solutions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.solution-card {
+  padding: 2px 16px 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.solution-card > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.solution-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.solution-card > summary::before {
+  content: '';
+  width: 0.42em;
+  height: 0.42em;
+  flex-shrink: 0;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.16s ease;
+}
+
+.solution-card[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.solution-steps {
+  margin: 0 0 16px;
+  padding: 0 0 0 1.2em;
+  color: var(--text);
+}
+
+.solution-steps li + li {
+  margin-top: 8px;
+}
+
 .account-details-section {
   margin-top: 32px;
 }

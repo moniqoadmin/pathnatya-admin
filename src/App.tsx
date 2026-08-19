@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage'
 import ListUsersPage from './pages/ListUsersPage'
 import LoginPage from './pages/LoginPage'
 import SetPasswordPage from './pages/SetPasswordPage'
+import SolutionsPage from './pages/SolutionsPage'
 import { canAccessAdmin } from './lib/roles'
 import { clearSession, getAccount, isAuthenticated } from './lib/session'
 import './App.css'
@@ -49,6 +50,7 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/creation" element={<CreationPage />} />
               <Route path="/users" element={<ListUsersPage />} />
+              <Route path="/solutions" element={<SolutionsPage />} />
             </Route>
           </Route>
         </Route>

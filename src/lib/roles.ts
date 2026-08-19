@@ -1,6 +1,6 @@
 export type AppRole = 'user' | 'admin' | 'superadmin' | 'developer'
 
-export type NavItemId = 'dashboard' | 'creation' | 'list-users'
+export type NavItemId = 'dashboard' | 'creation' | 'list-users' | 'solutions'
 
 export interface NavItem {
   id: NavItemId
@@ -12,12 +12,13 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', path: '/dashboard' },
   { id: 'creation', label: 'Creation', path: '/creation' },
   { id: 'list-users', label: 'List Users', path: '/users' },
+  { id: 'solutions', label: 'Solutions', path: '/solutions' },
 ]
 
 const ROLE_NAV: Record<Exclude<AppRole, 'user'>, NavItemId[]> = {
-  admin: ['dashboard', 'list-users'],
-  superadmin: ['dashboard', 'creation', 'list-users'],
-  developer: ['dashboard', 'creation', 'list-users'],
+  admin: ['dashboard', 'list-users', 'solutions'],
+  superadmin: ['dashboard', 'creation', 'list-users', 'solutions'],
+  developer: ['dashboard', 'creation', 'list-users', 'solutions'],
 }
 
 export function normalizeRole(role: string | null | undefined): AppRole | null {
