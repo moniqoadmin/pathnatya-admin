@@ -56,7 +56,7 @@ export default function SetPasswordPage() {
           <p className="brand-mark">Pathnatya</p>
           <h1>Set Password</h1>
           <p className="auth-subtitle">
-            Create a password for your admin account. It cannot be reset later.
+            Create a password for your account. It cannot be reset later.
           </p>
         </header>
 

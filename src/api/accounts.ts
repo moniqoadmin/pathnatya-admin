@@ -3,6 +3,7 @@ import { apiFetch } from './client'
 export interface CheckPhoneResponse {
   exists: boolean
   needsPassword: boolean
+  role?: string
 }
 
 export interface AccountTeam {
@@ -169,11 +170,36 @@ export interface AccountRolesResponse {
   roles: string[]
 }
 
+function unwrapCheckPhone(body: unknown): CheckPhoneResponse {
+  if (!body || typeof body !== 'object') {
+    return { exists: false, needsPassword: false }
+  }
+
+  const outer = body as Record<string, unknown>
+  const nested =
+    outer.data && typeof outer.data === 'object' && !Array.isArray(outer.data)
+      ? (outer.data as Record<string, unknown>)
+      : outer
+
+  const account =
+    nested.account && typeof nested.account === 'object' && !Array.isArray(nested.account)
+      ? (nested.account as Record<string, unknown>)
+      : null
+
+  const roleValue = nested.role ?? account?.role
+
+  return {
+    exists: Boolean(nested.exists),
+    needsPassword: Boolean(nested.needsPassword),
+    role: typeof roleValue === 'string' ? roleValue : undefined,
+  }
+}
+
 export function checkPhone(phoneNumber: string): Promise<CheckPhoneResponse> {
-  return apiFetch<CheckPhoneResponse>('/accounts/check-phone', {
+  return apiFetch<unknown>('/accounts/check-phone', {
     method: 'POST',
     json: { phoneNumber },
-  })
+  }).then(unwrapCheckPhone)
 }
 
 function unwrapAccountsList(body: unknown): PaginatedAccountsResponse {

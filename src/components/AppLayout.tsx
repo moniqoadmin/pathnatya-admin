@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
-import { canAccessAdmin, getNavItemsForRole } from '../lib/roles'
+import { canAccessAdmin, getHomePath, getNavItemsForRole, isUser } from '../lib/roles'
 import { clearSession, getAccount, isAuthenticated } from '../lib/session'
 
 export default function AppLayout() {
@@ -10,6 +10,10 @@ export default function AppLayout() {
 
   if (!isAuthenticated() || !account) {
     return <Navigate to="/login" replace />
+  }
+
+  if (isUser(account.role)) {
+    return <Navigate to={getHomePath(account.role)} replace />
   }
 
   if (!canAccessAdmin(account.role)) {

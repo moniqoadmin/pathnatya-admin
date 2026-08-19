@@ -4,12 +4,13 @@ import { checkPhone, getLoginTokens, login } from '../api/accounts'
 import type { ApiError } from '../api/client'
 import PasswordInput from '../components/PasswordInput'
 import { getDeviceId } from '../lib/device-id'
-import { canAccessAdmin, normalizeRole } from '../lib/roles'
+import { canAccessAdmin, isUser } from '../lib/roles'
 import {
   clearPendingPhone,
   getPendingPhone,
   savePendingPhone,
   saveSession,
+  saveVerifiedUser,
 } from '../lib/session'
 
 type Step = 'phone' | 'password'
@@ -55,6 +56,13 @@ export default function LoginPage() {
         return
       }
 
+      if (isUser(result.role)) {
+        clearPendingPhone()
+        saveVerifiedUser(trimmed, result.role ?? 'User')
+        navigate('/download', { replace: true })
+        return
+      }
+
       savePendingPhone(trimmed)
 
       if (result.needsPassword) {
@@ -92,12 +100,7 @@ export default function LoginPage() {
       const result = await login(trimmed, password, deviceId)
 
       if (!canAccessAdmin(result.account.role)) {
-        const role = normalizeRole(result.account.role)
-        setError(
-          role === 'user'
-            ? 'User accounts cannot access the admin console.'
-            : 'Your account does not have permission to access this console.',
-        )
+        setError('Your account does not have permission to access this console.')
         return
       }
 
@@ -130,11 +133,11 @@ export default function LoginPage() {
       <div className="auth-panel">
         <header className="auth-header">
           <p className="brand-mark">Pathnatya</p>
-          <h1>Admin Login</h1>
+          <h1>Sign in</h1>
           <p className="auth-subtitle">
             {step === 'phone'
               ? 'Enter your registered phone number to continue'
-              : 'Enter your password to access the dashboard'}
+              : 'Enter your password to continue'}
           </p>
         </header>
 

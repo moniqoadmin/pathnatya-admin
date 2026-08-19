@@ -31,7 +31,7 @@ function withAdminParam(path: string): string {
 function handleUnauthorized(): void {
   clearSession()
   const path = window.location.pathname
-  if (path === '/login' || path.startsWith('/login/') || path === '/set-password') {
+  if (path === '/login' || path.startsWith('/login/') || path === '/set-password' || path === '/download') {
     return
   }
   window.location.assign('/login')

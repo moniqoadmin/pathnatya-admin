@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { canAccessPath } from '../lib/roles'
+import { canAccessPath, getHomePath } from '../lib/roles'
 import { getAccount } from '../lib/session'
 
 export default function RequireRole() {
@@ -7,7 +7,7 @@ export default function RequireRole() {
   const account = getAccount()
 
   if (!account || !canAccessPath(account.role, location.pathname)) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to={account ? getHomePath(account.role) : '/login'} replace />
   }
 
   return <Outlet />

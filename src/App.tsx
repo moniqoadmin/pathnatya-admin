@@ -3,37 +3,77 @@ import AppLayout from './components/AppLayout'
 import RequireRole from './components/RequireRole'
 import CreationPage from './pages/CreationPage'
 import DashboardPage from './pages/DashboardPage'
+import DownloadPage from './pages/DownloadPage'
 import ListUsersPage from './pages/ListUsersPage'
 import LoginPage from './pages/LoginPage'
 import SetPasswordPage from './pages/SetPasswordPage'
 import SolutionsPage from './pages/SolutionsPage'
-import { canAccessAdmin } from './lib/roles'
-import { clearSession, getAccount, isAuthenticated } from './lib/session'
+import { ADMIN_HOME_PATH, USER_HOME_PATH, canAccessAdmin } from './lib/roles'
+import { clearSession, getAccount, hasDownloadAccess, isAuthenticated } from './lib/session'
 import './App.css'
 
 function PublicOnly() {
   if (isAuthenticated()) {
     const account = getAccount()
     if (account && canAccessAdmin(account.role)) {
-      return <Navigate to="/dashboard" replace />
+      return <Navigate to={ADMIN_HOME_PATH} replace />
     }
     clearSession()
   }
+
+  if (hasDownloadAccess()) {
+    return <Navigate to={USER_HOME_PATH} replace />
+  }
+
   return <Outlet />
 }
 
 function RequireAuth() {
   if (!isAuthenticated()) {
-    return <Navigate to="/login" replace />
+    return <Navigate to={hasDownloadAccess() ? USER_HOME_PATH : '/login'} replace />
   }
 
   const account = getAccount()
   if (!account || !canAccessAdmin(account.role)) {
+    if (hasDownloadAccess()) {
+      return <Navigate to={USER_HOME_PATH} replace />
+    }
     clearSession()
     return <Navigate to="/login" replace />
   }
 
   return <Outlet />
+}
+
+function RequireDownloadAccess() {
+  if (isAuthenticated()) {
+    const account = getAccount()
+    if (account && canAccessAdmin(account.role)) {
+      return <Navigate to={ADMIN_HOME_PATH} replace />
+    }
+  }
+
+  if (!hasDownloadAccess()) {
+    return <Navigate to="/login" replace />
+  }
+
+  return <Outlet />
+}
+
+function FallbackRoute() {
+  if (isAuthenticated()) {
+    const account = getAccount()
+    if (account && canAccessAdmin(account.role)) {
+      return <Navigate to={ADMIN_HOME_PATH} replace />
+    }
+    clearSession()
+  }
+
+  if (hasDownloadAccess()) {
+    return <Navigate to={USER_HOME_PATH} replace />
+  }
+
+  return <Navigate to="/login" replace />
 }
 
 function App() {
@@ -43,6 +83,9 @@ function App() {
         <Route element={<PublicOnly />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/set-password" element={<SetPasswordPage />} />
+        </Route>
+        <Route element={<RequireDownloadAccess />}>
+          <Route path="/download" element={<DownloadPage />} />
         </Route>
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
@@ -54,7 +97,7 @@ function App() {
             </Route>
           </Route>
         </Route>
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<FallbackRoute />} />
       </Routes>
     </BrowserRouter>
   )

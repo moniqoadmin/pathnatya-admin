@@ -2,6 +2,9 @@ export type AppRole = 'user' | 'admin' | 'superadmin' | 'developer'
 
 export type NavItemId = 'dashboard' | 'creation' | 'list-users' | 'solutions'
 
+export const USER_HOME_PATH = '/download'
+export const ADMIN_HOME_PATH = '/dashboard'
+
 export interface NavItem {
   id: NavItemId
   label: string
@@ -44,13 +47,29 @@ export function normalizeRole(role: string | null | undefined): AppRole | null {
   return null
 }
 
+export function isUser(role: string | null | undefined): boolean {
+  return normalizeRole(role) === 'user'
+}
+
 export function canAccessAdmin(role: string | null | undefined): boolean {
   const normalized = normalizeRole(role)
   return normalized === 'admin' || normalized === 'superadmin' || normalized === 'developer'
 }
 
+export function getHomePath(role: string | null | undefined): string {
+  return isUser(role) ? USER_HOME_PATH : ADMIN_HOME_PATH
+}
+
+export function isAdmin(role: string | null | undefined): boolean {
+  return normalizeRole(role) === 'admin'
+}
+
 export function isSuperAdmin(role: string | null | undefined): boolean {
   return normalizeRole(role) === 'superadmin'
+}
+
+export function canSeeAdminDownloads(role: string | null | undefined): boolean {
+  return isAdmin(role) || isSuperAdmin(role)
 }
 
 export function canEditAccount(role: string | null | undefined): boolean {
@@ -73,6 +92,10 @@ export function getNavItemsForRole(role: string | null | undefined): NavItem[] {
 }
 
 export function canAccessPath(role: string | null | undefined, path: string): boolean {
+  if (isUser(role)) {
+    return path === USER_HOME_PATH || path.startsWith(`${USER_HOME_PATH}/`)
+  }
+
   return getNavItemsForRole(role).some(
     (item) => path === item.path || path.startsWith(`${item.path}/`),
   )
