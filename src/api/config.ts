@@ -1,8 +1,8 @@
-export const APP_KEY = 'ZkjrS_rj8F7DbaGCtemUUpoBKcOqlcAtOVawSxKx6nwq62aIoRlX6-HkJjCgA5tI'
+export const APP_KEY = import.meta.env.VITE_APP_KEY ?? ''
 
-export const API_KEY_1 = 'x0m2-7u04b-5e1g-h7z1'
+export const API_KEY_1 = import.meta.env.VITE_API_KEY_1 ?? ''
 
-export const API_BASE = 'https://pathnatya-be-production.up.railway.app/api'
+export const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
 export const WINDOWS_DOWNLOAD_LINK = import.meta.env.VITE_WINDOWS_DOWNLOAD_LINK ?? ''
 
