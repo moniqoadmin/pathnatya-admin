@@ -320,10 +320,85 @@ export function listAccounts(
   }).then(unwrapAccountsList)
 }
 
+export function getAccountById(accountId: string, authToken: string): Promise<Account> {
+  return apiFetch<Account>(`/accounts/${accountId}`, {
+    authToken,
+  })
+}
+
 export function getAccountRoles(authToken: string): Promise<string[]> {
   return apiFetch<AccountRolesResponse>('/accounts/roles', { authToken }).then(
     (data) => data.roles,
   )
+}
+
+export interface AccountLog {
+  logId: string
+  id: string
+  phoneNumber: string
+  event: string
+  tampered: boolean
+  ipAddress: string | null
+  teamNumber: number | null
+  meta: Record<string, unknown> | null
+  createdAt: string
+}
+
+export interface ListAccountLogsQuery {
+  page?: number
+  limit?: number
+}
+
+export interface PaginatedAccountLogsResponse {
+  data: AccountLog[]
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+function unwrapAccountLogsList(body: unknown): PaginatedAccountLogsResponse {
+  if (!body || typeof body !== 'object') {
+    throw new Error('Unable to load account logs.')
+  }
+
+  const outer = body as {
+    data?: unknown
+    page?: number
+    limit?: number
+    total?: number
+    totalPages?: number
+  }
+  const nested =
+    outer.data && typeof outer.data === 'object' && !Array.isArray(outer.data)
+      ? (outer.data as PaginatedAccountLogsResponse)
+      : null
+
+  const page = nested && Array.isArray(nested.data) ? nested : (outer as PaginatedAccountLogsResponse)
+  if (!Array.isArray(page.data)) {
+    throw new Error('Unable to load account logs.')
+  }
+
+  return {
+    data: page.data,
+    page: page.page ?? 1,
+    limit: page.limit ?? 20,
+    total: page.total ?? page.data.length,
+    totalPages: page.totalPages ?? 1,
+  }
+}
+
+export function listAccountLogs(
+  accountId: string,
+  query: ListAccountLogsQuery,
+  authToken: string,
+): Promise<PaginatedAccountLogsResponse> {
+  const params = new URLSearchParams()
+  params.set('page', String(query.page ?? 1))
+  params.set('limit', String(query.limit ?? 20))
+  return apiFetch<unknown>(`/accounts/${accountId}/logs?${params.toString()}`, {
+    authToken,
+  }).then(unwrapAccountLogsList)
 }
 
 export interface UpdateAccountPayload {

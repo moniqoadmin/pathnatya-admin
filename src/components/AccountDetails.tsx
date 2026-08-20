@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import {
   ACCOUNT_ROLE_OPTIONS,
+  getAccountById,
   getAccountTeams,
   updateAccount,
   updateAccountTeam,
@@ -11,6 +12,7 @@ import {
   type UpdateAccountTeamPayload,
 } from '../api/accounts'
 import { getToken } from '../lib/session'
+import AccountLogs from './AccountLogs'
 import Modal from './Modal'
 import PasswordInput from './PasswordInput'
 
@@ -28,6 +30,7 @@ interface AccountDetailsProps {
   account: Account
   canEdit: boolean
   canEditPrivileged: boolean
+  canViewLogs?: boolean
   onBack: () => void
   onUpdated: (account: Account, message: string) => void
 }
@@ -128,11 +131,13 @@ export default function AccountDetails({
   account,
   canEdit,
   canEditPrivileged,
+  canViewLogs = false,
   onBack,
   onUpdated,
 }: AccountDetailsProps) {
   const [form, setForm] = useState(() => formFromAccount(account))
   const [editing, setEditing] = useState(false)
+  const [viewingLogs, setViewingLogs] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
@@ -144,6 +149,7 @@ export default function AccountDetails({
   const [pendingTeamAction, setPendingTeamAction] = useState<PendingTeamAction | null>(null)
   const [enableReason, setEnableReason] = useState('')
   const [enableReasonError, setEnableReasonError] = useState('')
+  const [reloading, setReloading] = useState(false)
 
   const fieldsDisabled = !canEdit || !editing || saving
   const locationDisabled = !canEditPrivileged || fieldsDisabled
@@ -154,6 +160,7 @@ export default function AccountDetails({
 
   useEffect(() => {
     setEditing(false)
+    setViewingLogs(false)
     setError('')
     setStatus('')
   }, [account.id])
@@ -197,6 +204,42 @@ export default function AccountDetails({
       cancelled = true
     }
   }, [account.id])
+
+  async function handleReload() {
+    const token = getToken()
+    if (!token) {
+      setError('Your session expired. Please log in again.')
+      return
+    }
+
+    setReloading(true)
+    setError('')
+    setStatus('')
+    setTeamsError('')
+    setTeamsStatus('')
+    setTeamsLoading(true)
+    closePendingTeamAction()
+
+    try {
+      const [nextAccount, nextTeams] = await Promise.all([
+        getAccountById(account.id, token),
+        getAccountTeams(account.id, token),
+      ])
+      onUpdated(nextAccount, '')
+      setTeams(nextTeams)
+      setEditing(false)
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message.trim()
+          ? err.message.trim()
+          : 'Unable to reload account. Please try again.'
+      setError(message)
+      setTeamsError(message)
+    } finally {
+      setReloading(false)
+      setTeamsLoading(false)
+    }
+  }
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -325,7 +368,7 @@ export default function AccountDetails({
         team,
         title: 'Reset password',
         description: `Reset the password for Team ${team.teamNumber}? They will need to set a new password.`,
-        patch: { setPassword: false },
+        patch: { setPassword: true },
       })
       return
     }
@@ -385,6 +428,10 @@ export default function AccountDetails({
   const loggedInCount = teams.length
   const configuredCount = account.numberOfTeams ?? 0
 
+  if (viewingLogs && canViewLogs) {
+    return <AccountLogs account={account} onBack={() => setViewingLogs(false)} />
+  }
+
   return (
     <div className="page-panel users-page account-details">
       <div className="page-header">
@@ -396,34 +443,59 @@ export default function AccountDetails({
           <h1>{title}</h1>
           <p className="page-subtitle">{account.phoneNumber}</p>
         </div>
-        {canEdit && (
-          <div className="page-actions">
-            {editing ? (
-              <>
+        <div className="page-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={reloading || saving}
+            onClick={() => void handleReload()}
+          >
+            {reloading ? 'Reloading...' : 'Reload'}
+          </button>
+          {editing ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleCancelEdit}
+                disabled={saving || reloading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="account-details-form"
+                className="btn btn-primary"
+                disabled={saving || reloading}
+              >
+                {saving ? 'Saving...' : 'Save changes'}
+              </button>
+            </>
+          ) : (
+            <>
+              {canViewLogs && (
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={handleCancelEdit}
-                  disabled={saving}
+                  disabled={reloading}
+                  onClick={() => setViewingLogs(true)}
                 >
-                  Cancel
+                  Logs
                 </button>
+              )}
+              {canEdit && (
                 <button
-                  type="submit"
-                  form="account-details-form"
+                  type="button"
                   className="btn btn-primary"
-                  disabled={saving}
+                  disabled={reloading}
+                  onClick={() => setEditing(true)}
                 >
-                  {saving ? 'Saving...' : 'Save changes'}
+                  Edit
                 </button>
-              </>
-            ) : (
-              <button type="button" className="btn btn-primary" onClick={() => setEditing(true)}>
-                Edit
-              </button>
-            )}
-          </div>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {error && <p className="form-error">{error}</p>}
@@ -472,15 +544,15 @@ export default function AccountDetails({
                           <button
                             type="button"
                             className="btn btn-secondary btn-compact"
-                            disabled={savingTeam || !slot.setPassword}
+                            disabled={savingTeam || slot.setPassword}
                             aria-describedby={
-                              slot.setPassword ? undefined : `reset-password-tip-${slot.id}`
+                              slot.setPassword ? `reset-password-tip-${slot.id}` : undefined
                             }
                             onClick={() => requestTeamAction(slot, 'reset')}
                           >
                             Reset
                           </button>
-                          {!slot.setPassword && (
+                          {slot.setPassword && (
                             <span
                               id={`reset-password-tip-${slot.id}`}
                               className="team-tooltip"

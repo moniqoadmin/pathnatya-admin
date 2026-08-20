@@ -403,7 +403,8 @@ select {
 }
 
 .app-content:has(.users-page),
-.app-content:has(.audit-trail-page) {
+.app-content:has(.audit-trail-page),
+.app-content:has(.account-logs-page) {
   width: min(100%, 1180px);
 }
 
@@ -534,8 +535,13 @@ select {
   margin-top: 24px;
 }
 
-.audit-trail-table {
+.audit-trail-table,
+.account-logs-table {
   min-width: 860px;
+}
+
+.account-logs-page .users-table-wrap {
+  margin-top: 24px;
 }
 
 .audit-message-cell {

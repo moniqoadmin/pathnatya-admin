@@ -77,6 +77,11 @@ export function canEditAccount(role: string | null | undefined): boolean {
   return canAccessAdmin(role)
 }
 
+export function canViewAccountLogs(role: string | null | undefined): boolean {
+  const normalized = normalizeRole(role)
+  return normalized === 'superadmin' || normalized === 'developer'
+}
+
 export function canEditPrivilegedAccountFields(role: string | null | undefined): boolean {
   const normalized = normalizeRole(role)
   return normalized === 'superadmin' || normalized === 'developer'

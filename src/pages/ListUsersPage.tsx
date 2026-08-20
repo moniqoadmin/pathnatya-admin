@@ -2,7 +2,12 @@ import { useEffect, useState, type KeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { getAccountRoles, listAccounts, type Account } from '../api/accounts'
 import AccountDetails from '../components/AccountDetails'
-import { canEditAccount, canEditPrivilegedAccountFields, isSuperAdmin } from '../lib/roles'
+import {
+  canEditAccount,
+  canEditPrivilegedAccountFields,
+  canViewAccountLogs,
+  isSuperAdmin,
+} from '../lib/roles'
 import { getAccount, getToken } from '../lib/session'
 
 const PAGE_SIZE = 20
@@ -68,6 +73,7 @@ export default function ListUsersPage() {
   const canFilterRoles = isSuperAdmin(account?.role)
   const canEdit = canEditAccount(account?.role)
   const canEditPrivileged = canEditPrivilegedAccountFields(account?.role)
+  const canViewLogs = canViewAccountLogs(account?.role)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const page = parsePage(searchParams.get('page'))
@@ -83,6 +89,7 @@ export default function ListUsersPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (!canFilterRoles) {
@@ -203,7 +210,7 @@ export default function ListUsersPage() {
     return () => {
       cancelled = true
     }
-  }, [page, search, role, canFilterRoles])
+  }, [page, search, role, canFilterRoles, reloadKey])
 
   function updateParams(mutate: (params: URLSearchParams) => void) {
     const next = new URLSearchParams(searchParams)
@@ -251,13 +258,16 @@ export default function ListUsersPage() {
         account={selectedAccount}
         canEdit={canEdit}
         canEditPrivileged={canEditPrivileged}
+        canViewLogs={canViewLogs}
         onBack={() => setSelectedAccount(null)}
         onUpdated={(updated, message) => {
           setSelectedAccount(updated)
           setRows((current) =>
             current.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)),
           )
-          setStatus(message)
+          if (message) {
+            setStatus(message)
+          }
         }}
       />
     )
@@ -273,6 +283,16 @@ export default function ListUsersPage() {
             Search and browse registered accounts
             {canFilterRoles ? ' by role' : ''}.
           </p>
+        </div>
+        <div className="page-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={loading}
+            onClick={() => setReloadKey((current) => current + 1)}
+          >
+            {loading ? 'Loading...' : 'Reload'}
+          </button>
         </div>
       </div>
 
