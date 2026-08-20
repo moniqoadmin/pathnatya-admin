@@ -14,11 +14,14 @@ import { getToken } from '../lib/session'
 import Modal from './Modal'
 import PasswordInput from './PasswordInput'
 
+const ENABLE_REASON_MIN_LENGTH = 10
+
 type PendingTeamAction = {
   team: AccountTeam
   title: string
   description: string
   patch: UpdateAccountTeamPayload
+  requiresReason?: boolean
 }
 
 interface AccountDetailsProps {
@@ -139,6 +142,8 @@ export default function AccountDetails({
   const [teamsStatus, setTeamsStatus] = useState('')
   const [savingTeamIds, setSavingTeamIds] = useState<string[]>([])
   const [pendingTeamAction, setPendingTeamAction] = useState<PendingTeamAction | null>(null)
+  const [enableReason, setEnableReason] = useState('')
+  const [enableReasonError, setEnableReasonError] = useState('')
 
   const fieldsDisabled = !canEdit || !editing || saving
   const locationDisabled = !canEditPrivileged || fieldsDisabled
@@ -282,8 +287,9 @@ export default function AccountDetails({
 
     setTeamsError('')
     setTeamsStatus('')
+    const { reason: _reason, ...teamFields } = patch
     setTeams((current) =>
-      current.map((item) => (item.id === team.id ? { ...item, ...patch } : item)),
+      current.map((item) => (item.id === team.id ? { ...item, ...teamFields } : item)),
     )
     setSavingTeamIds((current) => (current.includes(team.id) ? current : [...current, team.id]))
 
@@ -291,7 +297,7 @@ export default function AccountDetails({
       const updated = await updateAccountTeam(account.id, team.id, patch, token)
       setTeams((current) =>
         current.map((item) =>
-          item.id === team.id ? { ...item, ...patch, ...(updated ?? {}) } : item,
+          item.id === team.id ? { ...item, ...teamFields, ...(updated ?? {}) } : item,
         ),
       )
       const changed =
@@ -325,11 +331,14 @@ export default function AccountDetails({
     }
 
     if (kind === 'enable-login') {
+      setEnableReason('')
+      setEnableReasonError('')
       setPendingTeamAction({
         team,
         title: 'Enable login',
-        description: `Enable login for Team ${team.teamNumber}?`,
+        description: `Enable login for Team ${team.teamNumber}? Enter a valid reason to enable the user.`,
         patch: { isLoginDisabled: false },
+        requiresReason: true,
       })
       return
     }
@@ -342,12 +351,32 @@ export default function AccountDetails({
     })
   }
 
+  function closePendingTeamAction() {
+    setPendingTeamAction(null)
+    setEnableReason('')
+    setEnableReasonError('')
+  }
+
   function confirmPendingTeamAction() {
     if (!pendingTeamAction) {
       return
     }
+
+    if (pendingTeamAction.requiresReason) {
+      const reason = enableReason.trim()
+      if (reason.length < ENABLE_REASON_MIN_LENGTH) {
+        setEnableReasonError('Enter a valid reason to enable the user (at least 10 characters).')
+        return
+      }
+
+      const action = pendingTeamAction
+      closePendingTeamAction()
+      void handleTeamUpdate(action.team, { ...action.patch, reason })
+      return
+    }
+
     const action = pendingTeamAction
-    setPendingTeamAction(null)
+    closePendingTeamAction()
     void handleTeamUpdate(action.team, action.patch)
   }
 
@@ -716,17 +745,49 @@ export default function AccountDetails({
           title={pendingTeamAction.title}
           description={pendingTeamAction.description}
           labelledBy="team-action-confirm-title"
-          onClose={() => setPendingTeamAction(null)}
+          onClose={closePendingTeamAction}
         >
+          {pendingTeamAction.requiresReason && (
+            <div className="form-field">
+              <label htmlFor="enable-login-reason">Reason</label>
+              <textarea
+                id="enable-login-reason"
+                rows={4}
+                value={enableReason}
+                onChange={(event) => {
+                  setEnableReason(event.target.value)
+                  if (enableReasonError) {
+                    setEnableReasonError('')
+                  }
+                }}
+                placeholder="Enter a valid reason to enable the user"
+                autoFocus
+              />
+              {(enableReasonError || enableReason.trim().length < ENABLE_REASON_MIN_LENGTH) && (
+                <p className={enableReasonError ? 'form-error' : 'field-hint'}>
+                  {enableReasonError ||
+                    `${ENABLE_REASON_MIN_LENGTH - enableReason.trim().length} more characters required`}
+                </p>
+              )}
+            </div>
+          )}
           <div className="modal-actions">
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => setPendingTeamAction(null)}
+              onClick={closePendingTeamAction}
             >
               Cancel
             </button>
-            <button type="button" className="btn btn-primary" onClick={confirmPendingTeamAction}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={confirmPendingTeamAction}
+              disabled={
+                Boolean(pendingTeamAction.requiresReason) &&
+                enableReason.trim().length < ENABLE_REASON_MIN_LENGTH
+              }
+            >
               Confirm
             </button>
           </div>

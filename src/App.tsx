@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import AppLayout from './components/AppLayout'
 import RequireRole from './components/RequireRole'
+import AuditTrailPage from './pages/AuditTrailPage'
 import CreationPage from './pages/CreationPage'
 import DashboardPage from './pages/DashboardPage'
 import DownloadPage from './pages/DownloadPage'
@@ -94,6 +95,7 @@ function App() {
               <Route path="/creation" element={<CreationPage />} />
               <Route path="/users" element={<ListUsersPage />} />
               <Route path="/solutions" element={<SolutionsPage />} />
+              <Route path="/audit-trail" element={<AuditTrailPage />} />
             </Route>
           </Route>
         </Route>

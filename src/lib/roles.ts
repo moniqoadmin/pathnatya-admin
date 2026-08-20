@@ -1,6 +1,6 @@
 export type AppRole = 'user' | 'admin' | 'superadmin' | 'developer'
 
-export type NavItemId = 'dashboard' | 'creation' | 'list-users' | 'solutions'
+export type NavItemId = 'dashboard' | 'creation' | 'list-users' | 'solutions' | 'audit-trail'
 
 export const USER_HOME_PATH = '/download'
 export const ADMIN_HOME_PATH = '/dashboard'
@@ -16,12 +16,13 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'creation', label: 'Creation', path: '/creation' },
   { id: 'list-users', label: 'List Users', path: '/users' },
   { id: 'solutions', label: 'Solutions', path: '/solutions' },
+  { id: 'audit-trail', label: 'Audit Trail', path: '/audit-trail' },
 ]
 
 const ROLE_NAV: Record<Exclude<AppRole, 'user'>, NavItemId[]> = {
   admin: ['dashboard', 'list-users', 'solutions'],
-  superadmin: ['dashboard', 'creation', 'list-users', 'solutions'],
-  developer: ['dashboard', 'creation', 'list-users', 'solutions'],
+  superadmin: ['dashboard', 'creation', 'list-users', 'solutions', 'audit-trail'],
+  developer: ['dashboard', 'creation', 'list-users', 'solutions', 'audit-trail'],
 }
 
 export function normalizeRole(role: string | null | undefined): AppRole | null {

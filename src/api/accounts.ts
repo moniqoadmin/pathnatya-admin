@@ -261,6 +261,7 @@ export function getAccountTeams(
 export interface UpdateAccountTeamPayload {
   setPassword?: boolean
   isLoginDisabled?: boolean
+  reason?: string
 }
 
 function unwrapAccountTeam(body: unknown): AccountTeam | null {

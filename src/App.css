@@ -402,7 +402,8 @@ select {
   animation: rise-in 0.4s ease both;
 }
 
-.app-content:has(.users-page) {
+.app-content:has(.users-page),
+.app-content:has(.audit-trail-page) {
   width: min(100%, 1180px);
 }
 
@@ -527,6 +528,26 @@ select {
   text-align: center !important;
   color: var(--text-muted) !important;
   padding: 28px 14px !important;
+}
+
+.audit-trail-page .users-table-wrap {
+  margin-top: 24px;
+}
+
+.audit-trail-table {
+  min-width: 860px;
+}
+
+.audit-message-cell {
+  max-width: 360px;
+}
+
+.audit-message {
+  display: block;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-pill {
@@ -1158,8 +1179,7 @@ select {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(58, 36, 20, 0.45);
-  backdrop-filter: blur(8px);
+  background: rgba(58, 36, 20, 0.28);
 }
 
 .modal-panel {

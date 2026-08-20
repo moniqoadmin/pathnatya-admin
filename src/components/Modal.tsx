@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface ModalProps {
   title: string
@@ -39,7 +40,7 @@ export default function Modal({
     }
   }, [busy, dismissible, onClose])
 
-  return (
+  return createPortal(
     <div
       className="modal-backdrop"
       onClick={() => {
@@ -76,6 +77,7 @@ export default function Modal({
         <div className="modal-body">{children}</div>
         {footer ? <div className="modal-footer">{footer}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
