@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { Fragment, type FormEvent, useEffect, useState } from 'react'
 import {
   ACCOUNT_ROLE_OPTIONS,
   getAccountById,
@@ -453,7 +453,7 @@ export default function AccountDetails({
             {reloading ? 'Reloading...' : 'Reload'}
           </button>
           {editing ? (
-            <>
+            <Fragment key="editing-actions">
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -470,9 +470,9 @@ export default function AccountDetails({
               >
                 {saving ? 'Saving...' : 'Save changes'}
               </button>
-            </>
+            </Fragment>
           ) : (
-            <>
+            <Fragment key="view-actions">
               {canViewLogs && (
                 <button
                   type="button"
@@ -493,7 +493,7 @@ export default function AccountDetails({
                   Edit
                 </button>
               )}
-            </>
+            </Fragment>
           )}
         </div>
       </div>
