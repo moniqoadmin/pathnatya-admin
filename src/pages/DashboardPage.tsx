@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { SHOULD_SHOW_DOWNLOAD_PAGE_TO_ADMIN } from '../api/config'
 import DownloadCards from '../components/DownloadCards'
 import LoginAnalytics from '../components/LoginAnalytics'
+import { SHOW_ANALYTICS_KEY, useEntitlementEnabled } from '../lib/entitlements-store'
 import { canSeeAdminDownloads, canViewLoginAnalytics } from '../lib/roles'
 import { getAccount, isAuthenticated } from '../lib/session'
 
@@ -14,6 +15,7 @@ function formatValue(value: string | null | undefined): string {
 
 export default function DashboardPage() {
   const account = getAccount()
+  const showAnalytics = useEntitlementEnabled(SHOW_ANALYTICS_KEY)
 
   if (!isAuthenticated() || !account) {
     return <Navigate to="/login" replace />
@@ -47,7 +49,7 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      {canViewLoginAnalytics(account.role) && <LoginAnalytics />}
+      {canViewLoginAnalytics(account.role) && showAnalytics && <LoginAnalytics />}
 
       {SHOULD_SHOW_DOWNLOAD_PAGE_TO_ADMIN && canSeeAdminDownloads(account.role) && (
         <section className="dashboard-downloads">

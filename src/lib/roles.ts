@@ -135,6 +135,10 @@ export function canManageEntitlements(role: string | null | undefined): boolean 
   return normalized === 'superadmin' || normalized === 'developer'
 }
 
+export function canManageAppConfigurations(role: string | null | undefined): boolean {
+  return canManageEntitlements(role)
+}
+
 export function getNavItemsForRole(role: string | null | undefined): NavItem[] {
   const normalized = normalizeRole(role)
   if (!normalized || normalized === 'user') {

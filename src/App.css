@@ -1544,6 +1544,10 @@ select {
   background: rgba(58, 36, 20, 0.28);
 }
 
+.modal-backdrop-stacked {
+  z-index: 90;
+}
+
 .modal-panel {
   display: flex;
   flex-direction: column;
@@ -2252,6 +2256,74 @@ select {
   color: var(--text);
 }
 
+.app-config-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.app-config-toolbar .users-total {
+  align-items: flex-start;
+  margin: 0;
+}
+
+.app-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-config-card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.app-config-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.app-config-card-header h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.15rem;
+  color: var(--text-h);
+  letter-spacing: -0.02em;
+}
+
+.app-config-card .form-grid {
+  margin-bottom: 4px;
+}
+
+.app-config-card .modal-actions {
+  margin-top: 12px;
+}
+
+.app-config-json {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  min-height: 140px;
+  white-space: pre;
+}
+
+.app-config-remap-hint {
+  margin-top: 10px;
+  color: var(--danger-text);
+}
+
+.app-config-card .form-error,
+.app-config-card .form-success {
+  margin-top: 10px;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -2307,6 +2379,15 @@ select {
 
   .page-actions .btn {
     flex: 1;
+  }
+
+  .app-config-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .app-config-toolbar .page-actions {
+    width: auto;
+    flex: 1 1 auto;
   }
 
   .entitlement-card {

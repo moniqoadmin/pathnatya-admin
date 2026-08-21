@@ -5,6 +5,7 @@ const TOKEN_KEY = 'pathnatya-admin-token'
 const ACCOUNT_KEY = 'pathnatya-admin-account'
 const PHONE_KEY = 'pathnatya-admin-pending-phone'
 const VERIFIED_USER_KEY = 'pathnatya-verified-user'
+export const ENTITLEMENTS_STORAGE_KEY = 'pathnatya-admin-entitlements'
 
 export interface VerifiedUserAccess {
   phoneNumber: string
@@ -19,6 +20,7 @@ export function saveSession(token: string, account: Account): void {
 export function clearSession(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(ACCOUNT_KEY)
+  localStorage.removeItem(ENTITLEMENTS_STORAGE_KEY)
 }
 
 export function getToken(): string | null {

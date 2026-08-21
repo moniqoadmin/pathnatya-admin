@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { listEntitlements, updateEntitlement, type Entitlement } from '../api/entitlements'
+import AppConfigurationDialog from '../components/AppConfigurationDialog'
 import Modal from '../components/Modal'
-import { ADMIN_HOME_PATH, canManageEntitlements } from '../lib/roles'
+import { cacheEntitlements } from '../lib/entitlements-store'
+import { ADMIN_HOME_PATH, canManageAppConfigurations, canManageEntitlements } from '../lib/roles'
 import { getAccount, getToken } from '../lib/session'
 
 const KNOWN_LABELS: Record<string, { title: string; description: string }> = {
   ADMIN_LOGIN_ELECTRON_APP: {
     title: 'Electron privileged login',
     description: 'Allow privileged admin login from the Electron desktop app.',
+  },
+  SHOW_ANALYTICS: {
+    title: 'Show analytics',
+    description: 'Show login analytics on the dashboard.',
   },
 }
 
@@ -60,6 +66,7 @@ export default function EntitlementsPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [savingKey, setSavingKey] = useState('')
   const [pending, setPending] = useState<Entitlement | null>(null)
+  const [showAppConfig, setShowAppConfig] = useState(false)
 
   useEffect(() => {
     const token = getToken()
@@ -77,6 +84,7 @@ export default function EntitlementsPage() {
       .then((nextItems) => {
         if (!cancelled) {
           setItems(nextItems)
+          void cacheEntitlements(nextItems)
         }
       })
       .catch((loadError) => {
@@ -116,13 +124,12 @@ export default function EntitlementsPage() {
 
     try {
       const updated = await updateEntitlement(pending.key, { enabled: nextEnabled }, token)
-      setItems((current) => {
-        const exists = current.some((item) => item.key === updated.key)
-        if (!exists) {
-          return [...current, updated]
-        }
-        return current.map((item) => (item.key === updated.key ? { ...item, ...updated } : item))
-      })
+      const exists = items.some((item) => item.key === updated.key)
+      const nextItems = exists
+        ? items.map((item) => (item.key === updated.key ? { ...item, ...updated } : item))
+        : [...items, updated]
+      setItems(nextItems)
+      void cacheEntitlements(nextItems)
       setStatus(
         `${displayName(updated)} is now ${updated.enabled ? 'on' : 'off'}.`,
       )
@@ -157,6 +164,20 @@ export default function EntitlementsPage() {
               {items.length === 1 ? 'flag' : 'flags'}
             </span>
           </p>
+          {canManageAppConfigurations(account?.role) && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={loading || busy}
+              onClick={() => {
+                setError('')
+                setStatus('')
+                setShowAppConfig(true)
+              }}
+            >
+              App Configuration
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secondary"
@@ -220,6 +241,10 @@ export default function EntitlementsPage() {
             )
           })}
         </div>
+      )}
+
+      {showAppConfig && (
+        <AppConfigurationDialog onClose={() => setShowAppConfig(false)} />
       )}
 
       {pending && (

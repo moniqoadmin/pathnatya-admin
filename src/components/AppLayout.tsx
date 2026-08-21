@@ -1,12 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
+import { clearCachedEntitlements, refreshEntitlements } from '../lib/entitlements-store'
 import { canAccessAdmin, getHomePath, getNavItemsForRole, isUser } from '../lib/roles'
-import { clearSession, getAccount, isAuthenticated } from '../lib/session'
+import { clearSession, getAccount, getToken, isAuthenticated } from '../lib/session'
 
 export default function AppLayout() {
   const navigate = useNavigate()
   const account = getAccount()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  useEffect(() => {
+    const token = getToken()
+    if (!token) {
+      return
+    }
+
+    void refreshEntitlements(token).catch(() => {
+      // Keep any previously cached entitlements if the refresh fails.
+    })
+  }, [])
 
   if (!isAuthenticated() || !account) {
     return <Navigate to="/login" replace />
@@ -26,6 +38,7 @@ export default function AppLayout() {
     account.sanchalakName?.trim() || account.phoneNumber || 'Account'
 
   function handleLogout() {
+    clearCachedEntitlements()
     clearSession()
     navigate('/login', { replace: true })
   }

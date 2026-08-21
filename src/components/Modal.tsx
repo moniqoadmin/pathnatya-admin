@@ -7,6 +7,7 @@ interface ModalProps {
   labelledBy: string
   busy?: boolean
   wide?: boolean
+  stacked?: boolean
   dismissible?: boolean
   footer?: ReactNode
   onClose: () => void
@@ -19,6 +20,7 @@ export default function Modal({
   labelledBy,
   busy = false,
   wide = false,
+  stacked = false,
   dismissible = true,
   footer,
   onClose,
@@ -42,7 +44,7 @@ export default function Modal({
 
   return createPortal(
     <div
-      className="modal-backdrop"
+      className={`modal-backdrop${stacked ? ' modal-backdrop-stacked' : ''}`}
       onClick={() => {
         if (!busy && dismissible) {
           onClose()
