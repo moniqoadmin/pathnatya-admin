@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   envPrefix: ['VITE_', 'SHOULD_'],
   preview: {
-    allowedHosts: ['pathnatya-admin-production.up.railway.app'],
+    // Leading "." allows the domain and all Railway-generated subdomains
+    allowedHosts: ['.up.railway.app'],
   },
 })
