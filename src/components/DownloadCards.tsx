@@ -3,7 +3,7 @@ import { MAC_DOWNLOAD_LINK, WINDOWS_DOWNLOAD_LINK } from '../api/config'
 
 type Platform = 'windows' | 'mac'
 
-const DOWNLOAD_COOLDOWN_MS = 3 * 60 * 1000
+const DOWNLOAD_COOLDOWN_MS = 5 * 60 * 1000
 const DOWNLOAD_COOLDOWN_STORAGE_KEY = 'pathnatya-download-cooldown-until'
 
 function readCooldownUntil(): number {
