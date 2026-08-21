@@ -12,11 +12,14 @@ const EMPTY_ANALYTICS: LoginAnalyticsResponse = {
   totalTeams: 0,
 }
 
-function startOfTodayUtcIso(): string {
-  const now = new Date()
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  ).toISOString()
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000
+
+function startOfTodayIstIso(): string {
+  const istNow = new Date(Date.now() + IST_OFFSET_MS)
+  const midnightUtcMs =
+    Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()) -
+    IST_OFFSET_MS
+  return new Date(midnightUtcMs).toISOString()
 }
 
 function formatCount(value: number | null, loading: boolean): string {
@@ -89,7 +92,7 @@ export default function LoginAnalytics() {
     void getLoginAnalytics(
       {
         sanghat: sanghat.trim() || undefined,
-        since: sincePreset === 'today' ? startOfTodayUtcIso() : undefined,
+        since: sincePreset === 'today' ? startOfTodayIstIso() : undefined,
       },
       token,
     )
@@ -118,7 +121,7 @@ export default function LoginAnalytics() {
 
   const stats = analytics ?? EMPTY_ANALYTICS
   const scopeLabel = sanghat.trim() || 'All sanghats'
-  const periodLabel = sincePreset === 'today' ? 'since start of today (UTC)' : 'all time'
+  const periodLabel = sincePreset === 'today' ? 'since start of today (IST)' : 'all time'
 
   return (
     <section className="dashboard-analytics">
@@ -158,7 +161,7 @@ export default function LoginAnalytics() {
             className={`role-filter-tag${sincePreset === 'today' ? ' is-active' : ''}`}
             onClick={() => setSincePreset('today')}
           >
-            Today (UTC)
+            Today (IST)
           </button>
         </div>
 
