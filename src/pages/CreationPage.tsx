@@ -76,21 +76,21 @@ const CREATE_FAQ = [
   {
     question: 'Who can create an account from this page?',
     answer:
-      'Only SuperAdmin and Admin. SuperAdmin can set any role and any sanghat. Admins can only create User accounts in their own sanghat.',
+      'Only SuperAdmin and Developer. They can set any role and any sanghat. Admins cannot create accounts.',
   },
   {
     question: 'What is required?',
     answer:
-      'Only the mobile number. Use 10 digits for US, UK, or India — no country code, spaces, or extension. Example: 9876543210. It must be unique and cannot be changed later.',
+      'Mobile number, sanchalak name, and sanghat. Use 10 digits for US, UK, or India — no country code, spaces, or extension. Example: 9876543210. The number must be unique and cannot be changed later.',
   },
   {
     question: 'What if I leave the other fields as they are?',
     answer:
-      'The form starts with the usual defaults: role User, number of teams 1, no. of reboot 0, app configuration 1, logout button off, offline on, and source curl. Change any of them before saving if you need to.',
+      'Name and sanghat still need to be filled in. The rest start with the usual defaults: role User, number of teams 1, no. of reboot 0, app configuration 1, logout button off, offline on, and source curl. Change any of them before saving if you need to.',
   },
   {
-    question: 'Can an Admin create an Admin or SuperAdmin?',
-    answer: 'No. Admins can only create User accounts, and only in their own sanghat.',
+    question: 'Can an Admin create an account?',
+    answer: 'No. Admins cannot use this page. Only SuperAdmin and Developer can create accounts.',
   },
   {
     question: 'What if the phone number already exists?',
@@ -473,18 +473,18 @@ export default function CreationPage() {
           <div className="creation-guide-intro">
             <h2 id="create-account-guide-title">Create one account</h2>
             <p>
-              SuperAdmin and Admin only. Click <strong>Create</strong> and fill the form. Defaults
+              SuperAdmin and Developer only. Click <strong>Create</strong> and fill the form. Defaults
               are already filled in — change them if you need to.
             </p>
           </div>
 
           <ol className="creation-guide-steps">
             <li>
-              <h3>Enter the mobile number</h3>
+              <h3>Enter the required fields</h3>
               <p>
-                This is the only required field. Use 10 digits only for US, UK, or India. Do not add
-                a country code, spaces, or an extension. Example: <code>9876543210</code>. It must
-                be unique and cannot be changed later.
+                Mobile number, sanchalak name, and sanghat are required. Use 10 digits only for US,
+                UK, or India. Do not add a country code, spaces, or an extension. Example:{' '}
+                <code>9876543210</code>. The number must be unique and cannot be changed later.
               </p>
             </li>
 
@@ -554,12 +554,11 @@ export default function CreationPage() {
               <h3>Who can set what</h3>
               <ul>
                 <li>
-                  <strong>SuperAdmin</strong> can create accounts in any sanghat and assign any
-                  role: User, Admin, SuperAdmin, or Developer.
+                  <strong>SuperAdmin</strong> and <strong>Developer</strong> can create accounts in
+                  any sanghat and assign any role: User, Admin, SuperAdmin, or Developer.
                 </li>
                 <li>
-                  <strong>Admin</strong> can only create <strong>User</strong> accounts in their own
-                  sanghat.
+                  <strong>Admin</strong> cannot create accounts.
                 </li>
               </ul>
             </li>
@@ -567,10 +566,10 @@ export default function CreationPage() {
             <li>
               <h3>If create fails</h3>
               <ul>
+                <li>Sanchalak name or sanghat is missing</li>
                 <li>That phone number already exists</li>
                 <li>The number is not 10 digits</li>
                 <li>Your session expired — log in again</li>
-                <li>Admins cannot create a non-User role or an account in another sanghat</li>
               </ul>
             </li>
           </ol>

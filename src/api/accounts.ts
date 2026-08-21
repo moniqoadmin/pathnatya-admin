@@ -75,12 +75,12 @@ export type AccountRoleValue = (typeof ACCOUNT_ROLE_OPTIONS)[number]['value']
 export interface CreateAccountPayload {
   phoneNumber: string
   country?: string
-  sanghat?: string
+  sanghat: string
   jilha?: string
   taluka?: string
   group?: string
   kendra?: string
-  sanchalakName?: string
+  sanchalakName: string
   role?: AccountRoleValue
   numberOfTeams?: number
   numberOfReboot?: number
@@ -355,6 +355,70 @@ export function getAccountById(accountId: string, authToken: string): Promise<Ac
 export function getAccountRoles(authToken: string): Promise<string[]> {
   return apiFetch<AccountRolesResponse>('/accounts/roles', { authToken }).then(
     (data) => data.roles,
+  )
+}
+
+export interface LoginAnalyticsQuery {
+  sanghat?: string
+  since?: string
+}
+
+export interface LoginAnalyticsResponse {
+  accountsLoggedIn: number
+  teamsLoggedIn: number
+  totalAccounts: number
+  totalTeams: number
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+function numberField(record: Record<string, unknown>, key: string): number {
+  const value = record[key]
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function unwrapLoginAnalytics(body: unknown): LoginAnalyticsResponse {
+  const outer = asRecord(body)
+  if (!outer) {
+    throw new Error('Unable to load login analytics.')
+  }
+
+  const nested = asRecord(outer.data)
+  const record =
+    nested && ('accountsLoggedIn' in nested || 'teamsLoggedIn' in nested) ? nested : outer
+
+  if (!('accountsLoggedIn' in record) && !('teamsLoggedIn' in record)) {
+    throw new Error('Unable to load login analytics.')
+  }
+
+  return {
+    accountsLoggedIn: numberField(record, 'accountsLoggedIn'),
+    teamsLoggedIn: numberField(record, 'teamsLoggedIn'),
+    totalAccounts: numberField(record, 'totalAccounts'),
+    totalTeams: numberField(record, 'totalTeams'),
+  }
+}
+
+export function getLoginAnalytics(
+  query: LoginAnalyticsQuery,
+  authToken: string,
+): Promise<LoginAnalyticsResponse> {
+  const params = new URLSearchParams()
+  if (query.sanghat?.trim()) {
+    params.set('sanghat', query.sanghat.trim())
+  }
+  if (query.since?.trim()) {
+    params.set('since', query.since.trim())
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return apiFetch<unknown>(`/accounts/analytics${suffix}`, { authToken }).then(
+    unwrapLoginAnalytics,
   )
 }
 

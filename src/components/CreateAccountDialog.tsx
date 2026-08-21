@@ -113,6 +113,18 @@ export default function CreateAccountDialog({
       return
     }
 
+    const sanchalakName = form.sanchalakName.trim()
+    if (!sanchalakName) {
+      setError('Please enter a sanchalak name.')
+      return
+    }
+
+    const sanghat = form.sanghat.trim()
+    if (!sanghat) {
+      setError('Please enter a sanghat.')
+      return
+    }
+
     const token = getToken()
     if (!token) {
       setError('Your session expired. Please log in again.')
@@ -125,9 +137,9 @@ export default function CreateAccountDialog({
         {
           phoneNumber,
           role: adminOnly ? 'User' : form.role,
-          sanchalakName: optional(form.sanchalakName),
+          sanchalakName,
           country: optional(form.country) ?? optional(countryFromCode(countryCode)),
-          sanghat: optional(form.sanghat),
+          sanghat,
           jilha: optional(form.jilha),
           taluka: optional(form.taluka),
           group: optional(form.group),
@@ -205,6 +217,7 @@ export default function CreateAccountDialog({
                   update('phoneNumber', event.target.value.replace(/\D/g, '').slice(0, 10))
                 }
                 disabled={loading}
+                required
               />
             </div>
           </div>
@@ -236,6 +249,7 @@ export default function CreateAccountDialog({
               value={form.sanchalakName}
               onChange={(event) => update('sanchalakName', event.target.value)}
               disabled={loading}
+              required
             />
           </div>
 
@@ -257,6 +271,7 @@ export default function CreateAccountDialog({
               value={form.sanghat}
               onChange={(event) => update('sanghat', event.target.value)}
               disabled={loading || adminOnly}
+              required
             />
           </div>
 
@@ -373,8 +388,9 @@ export default function CreateAccountDialog({
         </div>
 
         <p className="field-hint">
-          Blank values fall back to: role User, teams 1, reboot 0, app configuration 1, logout
-          button off, offline on, source curl.
+          Mobile number, sanchalak name, and sanghat are required. Blank values for the rest fall
+          back to: role User, teams 1, reboot 0, app configuration 1, logout button off, offline
+          on, source curl.
         </p>
 
         {adminOnly && !form.sanghat.trim() && (
@@ -397,7 +413,9 @@ export default function CreateAccountDialog({
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={loading || (adminOnly && !form.sanghat.trim())}
+            disabled={
+              loading || !form.sanchalakName.trim() || !form.sanghat.trim()
+            }
           >
             {loading ? 'Creating...' : 'Create account'}
           </button>

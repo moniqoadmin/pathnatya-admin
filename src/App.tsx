@@ -6,6 +6,7 @@ import BulkFlagsPage from './pages/BulkFlagsPage'
 import CreationPage from './pages/CreationPage'
 import DashboardPage from './pages/DashboardPage'
 import DownloadPage from './pages/DownloadPage'
+import EntitlementsPage from './pages/EntitlementsPage'
 import ListUsersPage from './pages/ListUsersPage'
 import LoginPage from './pages/LoginPage'
 import SetPasswordPage from './pages/SetPasswordPage'
@@ -98,6 +99,7 @@ function App() {
               <Route path="/bulk-flags" element={<BulkFlagsPage />} />
               <Route path="/solutions" element={<SolutionsPage />} />
               <Route path="/audit-trail" element={<AuditTrailPage />} />
+              <Route path="/entitlements" element={<EntitlementsPage />} />
             </Route>
           </Route>
         </Route>

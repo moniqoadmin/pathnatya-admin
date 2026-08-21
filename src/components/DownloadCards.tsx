@@ -1,7 +1,34 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MAC_DOWNLOAD_LINK, WINDOWS_DOWNLOAD_LINK } from '../api/config'
 
 type Platform = 'windows' | 'mac'
+
+const DOWNLOAD_COOLDOWN_MS = 3 * 60 * 1000
+const DOWNLOAD_COOLDOWN_STORAGE_KEY = 'pathnatya-download-cooldown-until'
+
+function readCooldownUntil(): number {
+  try {
+    const until = Number(localStorage.getItem(DOWNLOAD_COOLDOWN_STORAGE_KEY))
+    return Number.isFinite(until) ? until : 0
+  } catch {
+    return 0
+  }
+}
+
+function writeCooldownUntil(until: number): void {
+  try {
+    localStorage.setItem(DOWNLOAD_COOLDOWN_STORAGE_KEY, String(until))
+  } catch {
+    // Ignore storage failures; in-memory cooldown still applies.
+  }
+}
+
+function formatCooldown(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
 
 function detectPreferredPlatform(): Platform | null {
   const platform = navigator.platform?.toLowerCase() ?? ''
@@ -45,12 +72,18 @@ function DownloadCard({
   description,
   href,
   recommended,
+  onCooldown,
+  remainingMs,
+  onDownloadStart,
 }: {
   platform: Platform
   title: string
   description: string
   href: string
   recommended: boolean
+  onCooldown: boolean
+  remainingMs: number
+  onDownloadStart: () => void
 }) {
   const available = Boolean(href)
 
@@ -65,9 +98,21 @@ function DownloadCard({
       <h2>{title}</h2>
       <p>{description}</p>
       {available ? (
-        <a className="btn btn-primary" href={href} target="_blank" rel="noopener noreferrer">
-          Download
-        </a>
+        onCooldown ? (
+          <button type="button" className="btn btn-primary" disabled>
+            Try again in {formatCooldown(remainingMs)}
+          </button>
+        ) : (
+          <a
+            className="btn btn-primary"
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onDownloadStart}
+          >
+            Download
+          </a>
+        )
       ) : (
         <button type="button" className="btn btn-secondary" disabled>
           Link not set
@@ -81,6 +126,31 @@ export default function DownloadCards() {
   const preferred = useMemo(() => detectPreferredPlatform(), [])
   const windowsUrl = WINDOWS_DOWNLOAD_LINK.trim()
   const macUrl = MAC_DOWNLOAD_LINK.trim()
+  const [cooldownUntil, setCooldownUntil] = useState(readCooldownUntil)
+  const [now, setNow] = useState(() => Date.now())
+  const remainingMs = Math.max(0, cooldownUntil - now)
+  const onCooldown = remainingMs > 0
+
+  useEffect(() => {
+    if (!onCooldown) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now())
+    }, 250)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [onCooldown])
+
+  function handleDownloadStart() {
+    const until = Date.now() + DOWNLOAD_COOLDOWN_MS
+    setCooldownUntil(until)
+    setNow(Date.now())
+    writeCooldownUntil(until)
+  }
 
   return (
     <div className="download-grid">
@@ -90,6 +160,9 @@ export default function DownloadCards() {
         description="Installer for Windows 10 and 11."
         href={windowsUrl}
         recommended={preferred === 'windows'}
+        onCooldown={onCooldown}
+        remainingMs={remainingMs}
+        onDownloadStart={handleDownloadStart}
       />
       <DownloadCard
         platform="mac"
@@ -97,6 +170,9 @@ export default function DownloadCards() {
         description="App for Mac computers running macOS."
         href={macUrl}
         recommended={preferred === 'mac'}
+        onCooldown={onCooldown}
+        remainingMs={remainingMs}
+        onDownloadStart={handleDownloadStart}
       />
     </div>
   )

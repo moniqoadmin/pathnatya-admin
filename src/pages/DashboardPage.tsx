@@ -1,7 +1,8 @@
 import { Navigate } from 'react-router-dom'
 import { SHOULD_SHOW_DOWNLOAD_PAGE_TO_ADMIN } from '../api/config'
 import DownloadCards from '../components/DownloadCards'
-import { canSeeAdminDownloads } from '../lib/roles'
+import LoginAnalytics from '../components/LoginAnalytics'
+import { canSeeAdminDownloads, canViewLoginAnalytics } from '../lib/roles'
 import { getAccount, isAuthenticated } from '../lib/session'
 
 function formatValue(value: string | null | undefined): string {
@@ -45,6 +46,8 @@ export default function DashboardPage() {
           Manage Pathnatya accounts and operations from this console.
         </p>
       </section>
+
+      {canViewLoginAnalytics(account.role) && <LoginAnalytics />}
 
       {SHOULD_SHOW_DOWNLOAD_PAGE_TO_ADMIN && canSeeAdminDownloads(account.role) && (
         <section className="dashboard-downloads">
