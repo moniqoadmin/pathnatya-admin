@@ -444,10 +444,44 @@ select {
   border-color: rgba(239, 122, 28, 0.7);
 }
 
+.users-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 .role-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.users-sanghat-filter {
+  min-width: min(240px, 100%);
+}
+
+.users-sanghat-filter select {
+  width: 100%;
+  padding: 8px 36px 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text-h);
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238b6544' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.users-sanghat-filter select:focus {
+  border-color: rgba(239, 122, 28, 0.7);
+}
+
+.users-sanghat-filter select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .role-filter-tag {
@@ -518,6 +552,10 @@ select {
 
 .users-table tbody tr.is-clickable:hover td {
   background: rgba(255, 196, 64, 0.1);
+}
+
+.users-table tbody tr.is-selected td {
+  background: rgba(255, 196, 64, 0.16);
 }
 
 .users-table tbody tr.is-clickable:focus-visible {
@@ -827,6 +865,36 @@ select {
   margin-bottom: 6px;
 }
 
+.team-card-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-info-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.team-info-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.team-info-btn:hover {
+  background: var(--surface);
+  border-color: rgba(239, 122, 28, 0.5);
+}
+
 .team-badge {
   display: grid;
   place-items: center;
@@ -853,6 +921,49 @@ select {
   margin-top: 2px;
   color: var(--text-muted);
   font-size: 0.82rem;
+}
+
+.team-details-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+  margin: 0;
+}
+
+.team-details-item {
+  display: grid;
+  gap: 4px;
+}
+
+.team-details-item.is-wide {
+  grid-column: 1 / -1;
+}
+
+.team-details-item dt {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.team-details-item dd {
+  margin: 0;
+  color: var(--text-h);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.team-details-json {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  overflow: auto;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: pre-wrap;
 }
 
 .team-toggle {
@@ -994,7 +1105,32 @@ select {
 .page-actions {
   display: flex;
   flex-shrink: 0;
+  align-items: center;
   gap: 10px;
+}
+
+.users-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 0 8px 0 0;
+  line-height: 1.15;
+}
+
+.users-total-value {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-h);
+  letter-spacing: -0.03em;
+}
+
+.users-total-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .page-panel > .form-error,
@@ -1012,6 +1148,10 @@ select {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--surface);
+}
+
+.creation-guide + .creation-guide {
+  margin-top: 20px;
 }
 
 .creation-guide-intro h2 {
@@ -1850,6 +1990,61 @@ select {
   letter-spacing: -0.03em;
 }
 
+.bulk-flags-page .page-subtitle {
+  max-width: 58ch;
+}
+
+.bulk-flags-form {
+  margin-top: 18px;
+}
+
+.bulk-flags-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.bulk-flags-block h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  color: var(--text-h);
+}
+
+.flag-rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.flag-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-strong);
+}
+
+.flag-row .field-hint {
+  margin: 0;
+}
+
+.bulk-flags-submit {
+  margin-top: 8px;
+  justify-content: flex-start;
+}
+
+.bulk-flags-page .users-table-wrap {
+  margin-top: 16px;
+}
+
+.bulk-flags-history-table {
+  min-width: 860px;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1913,7 +2108,9 @@ select {
 
   .form-grid,
   .checkbox-grid,
-  .phone-pair {
+  .phone-pair,
+  .team-details-list,
+  .flag-rows {
     grid-template-columns: 1fr;
   }
 

@@ -15,6 +15,7 @@ import { getToken } from '../lib/session'
 import AccountLogs from './AccountLogs'
 import Modal from './Modal'
 import PasswordInput from './PasswordInput'
+import TeamDetailsModal from './TeamDetailsModal'
 
 const ENABLE_REASON_MIN_LENGTH = 10
 
@@ -147,6 +148,7 @@ export default function AccountDetails({
   const [teamsStatus, setTeamsStatus] = useState('')
   const [savingTeamIds, setSavingTeamIds] = useState<string[]>([])
   const [pendingTeamAction, setPendingTeamAction] = useState<PendingTeamAction | null>(null)
+  const [inspectingTeam, setInspectingTeam] = useState<AccountTeam | null>(null)
   const [enableReason, setEnableReason] = useState('')
   const [enableReasonError, setEnableReasonError] = useState('')
   const [reloading, setReloading] = useState(false)
@@ -163,6 +165,7 @@ export default function AccountDetails({
     setViewingLogs(false)
     setError('')
     setStatus('')
+    setInspectingTeam(null)
   }, [account.id])
 
   useEffect(() => {
@@ -531,12 +534,39 @@ export default function AccountDetails({
                     >
                       <div className="team-card-header">
                         <span className="team-badge">{slot.teamNumber}</span>
-                        <div>
+                        <div className="team-card-copy">
                           <p className="team-card-title">Team {slot.teamNumber}</p>
                           <p className="team-card-meta">
                             Last login {formatDate(slot.lastLoginTime)}
                           </p>
                         </div>
+                        {canEditPrivileged && (
+                          <button
+                            type="button"
+                            className="team-info-btn"
+                            aria-label={`View Team ${slot.teamNumber} details`}
+                            onClick={() => setInspectingTeam(slot)}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <circle
+                                cx="12"
+                                cy="12"
+                                r="9"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                              />
+                              <circle cx="12" cy="8.2" r="1.15" fill="currentColor" />
+                              <path
+                                d="M12 11.2v6"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                       <div className="team-toggle">
                         <span>Reset password</span>
@@ -811,6 +841,14 @@ export default function AccountDetails({
         )}
       </form>
       </section>
+
+      {inspectingTeam && (
+        <TeamDetailsModal
+          teamId={inspectingTeam.id}
+          teamNumber={inspectingTeam.teamNumber}
+          onClose={() => setInspectingTeam(null)}
+        />
+      )}
 
       {pendingTeamAction && (
         <Modal

@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { getAccountRoles, listAccounts, type Account } from '../api/accounts'
+import { listSanghats } from '../api/sanghat-flags'
 import AccountDetails from '../components/AccountDetails'
 import {
   canEditAccount,
@@ -71,6 +72,7 @@ function accountStatus(account: Account): { label: string; className: string } {
 export default function ListUsersPage() {
   const account = getAccount()
   const canFilterRoles = isSuperAdmin(account?.role)
+  const canFilterSanghat = canEditPrivilegedAccountFields(account?.role)
   const canEdit = canEditAccount(account?.role)
   const canEditPrivileged = canEditPrivilegedAccountFields(account?.role)
   const canViewLogs = canViewAccountLogs(account?.role)
@@ -79,9 +81,12 @@ export default function ListUsersPage() {
   const page = parsePage(searchParams.get('page'))
   const search = searchParams.get('search') ?? ''
   const role = canFilterRoles ? (searchParams.get('role') ?? 'User') : ''
+  const sanghat = canFilterSanghat ? (searchParams.get('sanghat') ?? '') : ''
 
   const [searchInput, setSearchInput] = useState(search)
   const [roles, setRoles] = useState<string[]>([])
+  const [sanghats, setSanghats] = useState<string[]>([])
+  const [sanghatsLoading, setSanghatsLoading] = useState(canFilterSanghat)
   const [rows, setRows] = useState<Account[]>([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
@@ -160,6 +165,40 @@ export default function ListUsersPage() {
   }, [canFilterRoles])
 
   useEffect(() => {
+    if (!canFilterSanghat) {
+      return
+    }
+
+    const token = getToken()
+    if (!token) {
+      return
+    }
+
+    let cancelled = false
+    setSanghatsLoading(true)
+    void listSanghats(token)
+      .then((nextSanghats) => {
+        if (!cancelled) {
+          setSanghats(nextSanghats)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSanghats([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSanghatsLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [canFilterSanghat])
+
+  useEffect(() => {
     const token = getToken()
     if (!token) {
       setError('Your session expired. Please log in again.')
@@ -177,6 +216,7 @@ export default function ListUsersPage() {
         limit: PAGE_SIZE,
         search: search.trim() || undefined,
         role: canFilterRoles ? role || undefined : undefined,
+        sanghat: canFilterSanghat ? sanghat.trim() || undefined : undefined,
       },
       token,
     )
@@ -210,7 +250,7 @@ export default function ListUsersPage() {
     return () => {
       cancelled = true
     }
-  }, [page, search, role, canFilterRoles, reloadKey])
+  }, [page, search, role, sanghat, canFilterRoles, canFilterSanghat, reloadKey])
 
   function updateParams(mutate: (params: URLSearchParams) => void) {
     const next = new URLSearchParams(searchParams)
@@ -221,6 +261,17 @@ export default function ListUsersPage() {
   function handleRoleSelect(nextRole: string) {
     updateParams((params) => {
       params.set('role', nextRole)
+      params.set('page', '1')
+    })
+  }
+
+  function handleSanghatSelect(nextSanghat: string) {
+    updateParams((params) => {
+      if (nextSanghat) {
+        params.set('sanghat', nextSanghat)
+      } else {
+        params.delete('sanghat')
+      }
       params.set('page', '1')
     })
   }
@@ -281,10 +332,17 @@ export default function ListUsersPage() {
           <h1>List Users</h1>
           <p className="page-subtitle">
             Search and browse registered accounts
-            {canFilterRoles ? ' by role' : ''}.
+            {canFilterRoles ? ' by role' : ''}
+            {canFilterSanghat ? ' and sanghat' : ''}.
           </p>
         </div>
         <div className="page-actions">
+          <p className="users-total" aria-live="polite">
+            <span className="users-total-value">{total.toLocaleString()}</span>
+            <span className="users-total-label">
+              {total === 1 ? 'account' : 'accounts'}
+            </span>
+          </p>
           <button
             type="button"
             className="btn btn-secondary"
@@ -308,18 +366,46 @@ export default function ListUsersPage() {
           />
         </label>
 
-        {canFilterRoles && (
-          <div className="role-filters" aria-label="Filter by role">
-            {roles.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={`role-filter-tag${role === item ? ' is-active' : ''}`}
-                onClick={() => handleRoleSelect(item)}
-              >
-                {item}
-              </button>
-            ))}
+        {(canFilterRoles || canFilterSanghat) && (
+          <div className="users-filters">
+            {canFilterRoles && (
+              <div className="role-filters" aria-label="Filter by role">
+                {roles.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`role-filter-tag${role === item ? ' is-active' : ''}`}
+                    onClick={() => handleRoleSelect(item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {canFilterSanghat && (
+              <div className="users-sanghat-filter">
+                <select
+                  id="users-sanghat"
+                  aria-label="Sanghat"
+                  value={sanghat}
+                  disabled={sanghatsLoading}
+                  onChange={(event) => handleSanghatSelect(event.target.value)}
+                >
+                  <option value="">
+                    {sanghatsLoading ? 'Loading sanghats…' : 'All sanghats'}
+                  </option>
+                  {sanghat && !sanghats.includes(sanghat) && (
+                    <option value={sanghat}>{sanghat}</option>
+                  )}
+                  {sanghats.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -404,7 +490,7 @@ export default function ListUsersPage() {
 
       <div className="users-pagination">
         <p className="users-pagination-meta">
-          {loading ? 'Loading...' : `Showing ${from}-${to} of ${total}`}
+          {loading ? 'Loading...' : `Showing ${from.toLocaleString()}-${to.toLocaleString()} of ${total.toLocaleString()}`}
         </p>
         <div className="users-pagination-actions">
           <button

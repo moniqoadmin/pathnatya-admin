@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { downloadAccountBulkTemplate } from '../api/accounts'
 import BulkUploadDialog from '../components/BulkUploadDialog'
 import CreateAccountDialog from '../components/CreateAccountDialog'
-import { canEditPrivilegedAccountFields, isSuperAdmin } from '../lib/roles'
+import { canCreateAccounts, canEditPrivilegedAccountFields } from '../lib/roles'
 import { getAccount, getToken } from '../lib/session'
 
 const OPTIONAL_COLUMNS = [
@@ -70,6 +70,37 @@ const BULK_UPLOAD_FAQ = [
   },
 ] as const
 
+const CREATE_FAQ = [
+  {
+    question: 'Who can create an account from this page?',
+    answer:
+      'Only SuperAdmin and Admin. SuperAdmin can set any role and any sanghat. Admins can only create User accounts in their own sanghat.',
+  },
+  {
+    question: 'What is required?',
+    answer:
+      'Only the mobile number. Use 10 digits for US, UK, or India — no country code, spaces, or extension. Example: 9876543210. It must be unique and cannot be changed later.',
+  },
+  {
+    question: 'What if I leave the other fields as they are?',
+    answer:
+      'The form starts with the usual defaults: role User, number of teams 1, no. of reboot 0, app configuration 1, logout button off, offline on, and source curl. Change any of them before saving if you need to.',
+  },
+  {
+    question: 'Can an Admin create an Admin or SuperAdmin?',
+    answer: 'No. Admins can only create User accounts, and only in their own sanghat.',
+  },
+  {
+    question: 'What if the phone number already exists?',
+    answer: 'Create is rejected. Existing accounts are not overwritten.',
+  },
+  {
+    question: 'Are teams created right away?',
+    answer:
+      'No. Teams are created later when a device logs in, up to the number of teams you set.',
+  },
+] as const
+
 export default function CreationPage() {
   const account = getAccount()
   const [showCreate, setShowCreate] = useState(false)
@@ -81,7 +112,7 @@ export default function CreationPage() {
   )
 
   const canBulkUpload = canEditPrivilegedAccountFields(account?.role)
-  const canCreate = isSuperAdmin(account?.role)
+  const canCreate = canCreateAccounts(account?.role)
 
   async function downloadTemplate() {
     setTemplateError('')
@@ -297,10 +328,133 @@ export default function CreationPage() {
         </section>
       )}
 
+      {canCreate && (
+        <section className="creation-guide" aria-labelledby="create-account-guide-title">
+          <div className="creation-guide-intro">
+            <h2 id="create-account-guide-title">Create one account</h2>
+            <p>
+              SuperAdmin and Admin only. Click <strong>Create</strong> and fill the form. Defaults
+              are already filled in — change them if you need to.
+            </p>
+          </div>
+
+          <ol className="creation-guide-steps">
+            <li>
+              <h3>Enter the mobile number</h3>
+              <p>
+                This is the only required field. Use 10 digits only for US, UK, or India. Do not add
+                a country code, spaces, or an extension. Example: <code>9876543210</code>. It must
+                be unique and cannot be changed later.
+              </p>
+            </li>
+
+            <li>
+              <h3>Review the defaults</h3>
+              <p>
+                The form starts with these values. You can change them before saving. If you clear a
+                field, the default is used again.
+              </p>
+              <div className="creation-guide-table-wrap">
+                <table className="creation-guide-table">
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Default</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Role</td>
+                      <td>
+                        <code>User</code>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Number of teams</td>
+                      <td>
+                        <code>1</code>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>No. of reboot</td>
+                      <td>
+                        <code>0</code>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>App configuration</td>
+                      <td>
+                        <code>1</code>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Logout button</td>
+                      <td>
+                        <code>false</code>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Offline</td>
+                      <td>
+                        <code>true</code>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Source</td>
+                      <td>
+                        <code>curl</code>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </li>
+
+            <li>
+              <h3>Who can set what</h3>
+              <ul>
+                <li>
+                  <strong>SuperAdmin</strong> can create accounts in any sanghat and assign any
+                  role: User, Admin, SuperAdmin, or Developer.
+                </li>
+                <li>
+                  <strong>Admin</strong> can only create <strong>User</strong> accounts in their own
+                  sanghat.
+                </li>
+              </ul>
+            </li>
+
+            <li>
+              <h3>If create fails</h3>
+              <ul>
+                <li>That phone number already exists</li>
+                <li>The number is not 10 digits</li>
+                <li>Your session expired — log in again</li>
+                <li>Admins cannot create a non-User role or an account in another sanghat</li>
+              </ul>
+            </li>
+          </ol>
+
+          <section className="creation-faq" aria-labelledby="create-account-faq-title">
+            <h2 id="create-account-faq-title">Create FAQ</h2>
+            <p className="creation-faq-intro">Common questions about creating one account.</p>
+            <div className="creation-faq-list">
+              {CREATE_FAQ.map((item) => (
+                <details key={item.question} className="solution-card">
+                  <summary>{item.question}</summary>
+                  <p className="creation-faq-answer">{item.answer}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        </section>
+      )}
+
       {showUpload && <BulkUploadDialog onClose={() => setShowUpload(false)} />}
 
       {showCreate && (
         <CreateAccountDialog
+          actor={account}
           onClose={() => setShowCreate(false)}
           onCreated={(message) => {
             setShowCreate(false)

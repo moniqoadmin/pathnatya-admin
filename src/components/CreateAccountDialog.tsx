@@ -2,12 +2,15 @@ import { type FormEvent, useState } from 'react'
 import {
   ACCOUNT_ROLE_OPTIONS,
   createAccount,
+  type Account,
   type AccountRoleValue,
 } from '../api/accounts'
-import Modal from './Modal'
+import { isAdmin } from '../lib/roles'
 import { getToken } from '../lib/session'
+import Modal from './Modal'
 
 interface CreateAccountDialogProps {
+  actor: Account | null
   onClose: () => void
   onCreated: (message: string) => void
 }
@@ -18,7 +21,7 @@ const COUNTRY_CODES = [
   { code: '1', country: 'US' },
 ] as const
 
-const EMPTY_FORM = {
+const DEFAULTS = {
   countryCode: '91',
   phoneNumber: '',
   role: 'User' as AccountRoleValue,
@@ -29,6 +32,12 @@ const EMPTY_FORM = {
   taluka: '',
   group: '',
   kendra: '',
+  numberOfTeams: 1,
+  numberOfReboot: 0,
+  appConfiguration: 1,
+  logoutButton: false,
+  isOffline: true,
+  source: 'curl',
 }
 
 function optional(value: string): string | undefined {
@@ -40,15 +49,37 @@ function countryFromCode(code: string): string {
   return COUNTRY_CODES.find((item) => item.code === code)?.country ?? ''
 }
 
+function wholeNumber(value: number, fallback: number, min: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback
+  }
+  return Math.max(min, Math.floor(value))
+}
+
+function formFromActor(actor: Account | null) {
+  const adminOnly = isAdmin(actor?.role)
+  return {
+    ...DEFAULTS,
+    country: actor?.country?.trim() || DEFAULTS.country,
+    sanghat: adminOnly ? actor?.sanghat?.trim() || DEFAULTS.sanghat : DEFAULTS.sanghat,
+    jilha: adminOnly ? actor?.jilha?.trim() || DEFAULTS.jilha : DEFAULTS.jilha,
+    taluka: adminOnly ? actor?.taluka?.trim() || DEFAULTS.taluka : DEFAULTS.taluka,
+    group: adminOnly ? actor?.group?.trim() || DEFAULTS.group : DEFAULTS.group,
+    kendra: adminOnly ? actor?.kendra?.trim() || DEFAULTS.kendra : DEFAULTS.kendra,
+  }
+}
+
 export default function CreateAccountDialog({
+  actor,
   onClose,
   onCreated,
 }: CreateAccountDialogProps) {
-  const [form, setForm] = useState(EMPTY_FORM)
+  const adminOnly = isAdmin(actor?.role)
+  const [form, setForm] = useState(() => formFromActor(actor))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  function update<K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) {
+  function update<K extends keyof typeof DEFAULTS>(key: K, value: (typeof DEFAULTS)[K]) {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
@@ -82,12 +113,18 @@ export default function CreateAccountDialog({
       return
     }
 
+    const token = getToken()
+    if (!token) {
+      setError('Your session expired. Please log in again.')
+      return
+    }
+
     setLoading(true)
     try {
       const account = await createAccount(
         {
           phoneNumber,
-          role: form.role,
+          role: adminOnly ? 'User' : form.role,
           sanchalakName: optional(form.sanchalakName),
           country: optional(form.country) ?? optional(countryFromCode(countryCode)),
           sanghat: optional(form.sanghat),
@@ -95,9 +132,17 @@ export default function CreateAccountDialog({
           taluka: optional(form.taluka),
           group: optional(form.group),
           kendra: optional(form.kendra),
-          metadata: { source: 'admin-import', countryCode },
+          numberOfTeams: wholeNumber(form.numberOfTeams, DEFAULTS.numberOfTeams, 1),
+          numberOfReboot: wholeNumber(form.numberOfReboot, DEFAULTS.numberOfReboot, 0),
+          appConfiguration: wholeNumber(form.appConfiguration, DEFAULTS.appConfiguration, 1),
+          logoutButton: form.logoutButton,
+          isOffline: form.isOffline,
+          metadata: {
+            source: form.source.trim() || DEFAULTS.source,
+            countryCode,
+          },
         },
-        getToken() ?? undefined,
+        token,
       )
 
       onCreated(
@@ -117,9 +162,14 @@ export default function CreateAccountDialog({
   return (
     <Modal
       title="Create account"
-      description="Add a single Pathnatya account. Enter the country extension and 10-digit mobile number, then choose a role and organisation details."
+      description={
+        adminOnly
+          ? 'Admins can create User accounts in their own sanghat. Defaults are filled in — change them if needed.'
+          : 'Add a Pathnatya account. Defaults are filled in — change them if needed.'
+      }
       labelledBy="create-account-title"
       busy={loading}
+      wide
       onClose={onClose}
     >
       <form className="stack-form" onSubmit={handleSubmit}>
@@ -159,15 +209,17 @@ export default function CreateAccountDialog({
             </div>
           </div>
 
-          <p className="field-hint span-2">Use 91 for India, 44 for the UK, or 1 for the US.</p>
+          <p className="field-hint span-2">
+            Required. 10 digits only for US, UK, or India — no country code, spaces, or extension.
+          </p>
 
-          <div className="form-field span-2">
+          <div className="form-field">
             <label htmlFor="create-role">Role</label>
             <select
               id="create-role"
-              value={form.role}
+              value={adminOnly ? 'User' : form.role}
               onChange={(event) => update('role', event.target.value as AccountRoleValue)}
-              disabled={loading}
+              disabled={loading || adminOnly}
             >
               {ACCOUNT_ROLE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -176,8 +228,7 @@ export default function CreateAccountDialog({
               ))}
             </select>
           </div>
-
-          <div className="form-field span-2">
+          <div className="form-field">
             <label htmlFor="create-sanchalak">Sanchalak name</label>
             <input
               id="create-sanchalak"
@@ -205,7 +256,7 @@ export default function CreateAccountDialog({
               type="text"
               value={form.sanghat}
               onChange={(event) => update('sanghat', event.target.value)}
-              disabled={loading}
+              disabled={loading || adminOnly}
             />
           </div>
 
@@ -250,7 +301,87 @@ export default function CreateAccountDialog({
               disabled={loading}
             />
           </div>
+
+          <div className="form-field">
+            <label htmlFor="create-number-of-teams">Number of teams</label>
+            <input
+              id="create-number-of-teams"
+              type="number"
+              min={1}
+              step={1}
+              value={form.numberOfTeams}
+              onChange={(event) => update('numberOfTeams', Number(event.target.value))}
+              disabled={loading}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="create-number-of-reboot">No. of reboot</label>
+            <input
+              id="create-number-of-reboot"
+              type="number"
+              min={0}
+              step={1}
+              value={form.numberOfReboot}
+              onChange={(event) => update('numberOfReboot', Number(event.target.value))}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="create-app-configuration">App configuration</label>
+            <input
+              id="create-app-configuration"
+              type="number"
+              min={1}
+              step={1}
+              value={form.appConfiguration}
+              onChange={(event) => update('appConfiguration', Number(event.target.value))}
+              disabled={loading}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="create-source">Source</label>
+            <input
+              id="create-source"
+              type="text"
+              value={form.source}
+              onChange={(event) => update('source', event.target.value)}
+              disabled={loading}
+            />
+          </div>
         </div>
+
+        <div className="checkbox-grid">
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={form.logoutButton}
+              onChange={(event) => update('logoutButton', event.target.checked)}
+              disabled={loading}
+            />
+            <span>Logout button</span>
+          </label>
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={form.isOffline}
+              onChange={(event) => update('isOffline', event.target.checked)}
+              disabled={loading}
+            />
+            <span>Offline</span>
+          </label>
+        </div>
+
+        <p className="field-hint">
+          Blank values fall back to: role User, teams 1, reboot 0, app configuration 1, logout
+          button off, offline on, source curl.
+        </p>
+
+        {adminOnly && !form.sanghat.trim() && (
+          <p className="form-error">
+            Your account has no sanghat. Ask a SuperAdmin to set it before creating users.
+          </p>
+        )}
 
         {error && <p className="form-error">{error}</p>}
 
@@ -263,7 +394,11 @@ export default function CreateAccountDialog({
           >
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading || (adminOnly && !form.sanghat.trim())}
+          >
             {loading ? 'Creating...' : 'Create account'}
           </button>
         </div>

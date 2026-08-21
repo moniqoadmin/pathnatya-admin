@@ -19,6 +19,14 @@ function errorMessage(data: unknown, fallback: string): string {
     if (typeof message === 'string' && message.trim()) {
       return message
     }
+    if (Array.isArray(message)) {
+      const parts = message
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+      if (parts.length > 0) {
+        return parts.join(' ')
+      }
+    }
   }
   return fallback
 }

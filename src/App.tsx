@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import AppLayout from './components/AppLayout'
 import RequireRole from './components/RequireRole'
 import AuditTrailPage from './pages/AuditTrailPage'
+import BulkFlagsPage from './pages/BulkFlagsPage'
 import CreationPage from './pages/CreationPage'
 import DashboardPage from './pages/DashboardPage'
 import DownloadPage from './pages/DownloadPage'
@@ -94,6 +95,7 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/creation" element={<CreationPage />} />
               <Route path="/users" element={<ListUsersPage />} />
+              <Route path="/bulk-flags" element={<BulkFlagsPage />} />
               <Route path="/solutions" element={<SolutionsPage />} />
               <Route path="/audit-trail" element={<AuditTrailPage />} />
             </Route>

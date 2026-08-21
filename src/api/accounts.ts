@@ -82,6 +82,11 @@ export interface CreateAccountPayload {
   kendra?: string
   sanchalakName?: string
   role?: AccountRoleValue
+  numberOfTeams?: number
+  numberOfReboot?: number
+  appConfiguration?: number
+  logoutButton?: boolean
+  isOffline?: boolean
   metadata?: Record<string, unknown>
 }
 
@@ -156,6 +161,7 @@ export interface ListAccountsQuery {
   limit?: number
   search?: string
   role?: string
+  sanghat?: string
 }
 
 export interface PaginatedAccountsResponse {
@@ -218,7 +224,13 @@ function unwrapAccountsList(body: unknown): PaginatedAccountsResponse {
     throw new Error('Unable to load accounts.')
   }
 
-  return page
+  return {
+    data: page.data,
+    page: Number(page.page ?? 1) || 1,
+    limit: Number(page.limit ?? 20) || 20,
+    total: Number(page.total ?? page.data.length) || 0,
+    totalPages: Math.max(1, Number(page.totalPages ?? 1) || 1),
+  }
 }
 
 function unwrapAccountTeams(body: unknown): AccountTeam[] {
@@ -256,6 +268,15 @@ export function getAccountTeams(
   return apiFetch<unknown>(`/accounts/${accountId}/teams`, {
     authToken,
   }).then(unwrapAccountTeams)
+}
+
+export async function getTeamById(teamId: string, authToken: string): Promise<AccountTeam> {
+  const data = await apiFetch<unknown>(`/teams/${teamId}`, { authToken })
+  const team = unwrapAccountTeam(data)
+  if (!team) {
+    throw new Error('Unable to load team details.')
+  }
+  return team
 }
 
 export interface UpdateAccountTeamPayload {
@@ -314,6 +335,9 @@ export function listAccounts(
   }
   if (query.role?.trim()) {
     params.set('role', query.role.trim())
+  }
+  if (query.sanghat?.trim()) {
+    params.set('sanghat', query.sanghat.trim())
   }
   return apiFetch<unknown>(`/accounts?${params.toString()}`, {
     authToken,
