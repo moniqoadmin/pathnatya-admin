@@ -121,12 +121,14 @@ export interface AccountImportAccepted {
 export interface AccountImportJob {
   id: string
   status: AccountImportStatus
+  kind?: string
   fileName: string
   fileSize: number
   totalRows: number
   createdCount: number
   failedCount: number
   failureMessage: string | null
+  requestedBy?: string
   startedAt: string | null
   completedAt: string | null
   createdAt: string
@@ -514,6 +516,40 @@ export function getAccountImportErrors(
 ): Promise<AccountImportErrorsPage> {
   return apiFetch<AccountImportErrorsPage>(
     `/accounts/bulk/upload/${jobId}/errors?page=${page}&limit=${limit}`,
+    { authToken },
+  )
+}
+
+export function bulkUpdateTeams(
+  file: File,
+  authToken: string,
+): Promise<AccountImportAccepted> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return apiFetch<AccountImportAccepted>('/accounts/bulk/teams', {
+    method: 'POST',
+    authToken,
+    body: formData,
+  })
+}
+
+export function getTeamImportJob(
+  jobId: string,
+  authToken: string,
+): Promise<AccountImportJob> {
+  return apiFetch<AccountImportJob>(`/accounts/bulk/teams/${jobId}`, {
+    authToken,
+  })
+}
+
+export function getTeamImportErrors(
+  jobId: string,
+  page: number,
+  limit: number,
+  authToken: string,
+): Promise<AccountImportErrorsPage> {
+  return apiFetch<AccountImportErrorsPage>(
+    `/accounts/bulk/teams/${jobId}/errors?page=${page}&limit=${limit}`,
     { authToken },
   )
 }

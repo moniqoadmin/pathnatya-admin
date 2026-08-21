@@ -39,7 +39,10 @@ export function downloadCsv(filename: string, csv: string): void {
   URL.revokeObjectURL(url)
 }
 
-export function downloadBulkErrorsCsv(errors: BulkUploadError[]): void {
+export function downloadBulkErrorsCsv(
+  errors: BulkUploadError[],
+  filenamePrefix = 'bulk-upload-errors',
+): void {
   const stamp = new Date().toISOString().slice(0, 10)
-  downloadCsv(`bulk-upload-errors-${stamp}.csv`, bulkErrorsToCsv(errors))
+  downloadCsv(`${filenamePrefix}-${stamp}.csv`, bulkErrorsToCsv(errors))
 }

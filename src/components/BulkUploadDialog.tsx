@@ -1,9 +1,12 @@
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import {
+  bulkUpdateTeams,
   bulkUploadAccounts,
   downloadAccountBulkTemplate,
   getAccountImportErrors,
   getAccountImportJob,
+  getTeamImportErrors,
+  getTeamImportJob,
   type AccountImportError,
   type AccountImportErrorsPage,
   type AccountImportJob,
@@ -18,9 +21,16 @@ const EXCEL_ACCEPT =
   '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const MAX_FILE_BYTES = 20 * 1024 * 1024
 const POLL_INTERVAL_MS = 2_500
-const ACTIVE_JOB_KEY = 'pathnatya.activeAccountImportJobId'
+
+export type BulkUploadKind = 'accounts' | 'teams'
+
+const ACTIVE_JOB_KEYS: Record<BulkUploadKind, string> = {
+  accounts: 'pathnatya.activeAccountImportJobId',
+  teams: 'pathnatya.activeTeamImportJobId',
+}
 
 interface BulkUploadDialogProps {
+  kind?: BulkUploadKind
   onClose: () => void
 }
 
@@ -54,11 +64,16 @@ function apiErrorMessage(error: unknown, fallback: string): string {
     : fallback
 }
 
-export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
+export default function BulkUploadDialog({
+  kind = 'accounts',
+  onClose,
+}: BulkUploadDialogProps) {
+  const isTeams = kind === 'teams'
+  const activeJobKey = ACTIVE_JOB_KEYS[kind]
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [jobId, setJobId] = useState(
-    () => sessionStorage.getItem(ACTIVE_JOB_KEY) ?? '',
+    () => sessionStorage.getItem(activeJobKey) ?? '',
   )
   const [job, setJob] = useState<AccountImportJob | null>(null)
   const [errorsPage, setErrorsPage] = useState<AccountImportErrorsPage | null>(null)
@@ -87,14 +102,18 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
         return
       }
       try {
-        const next = await getAccountImportJob(jobId, token)
+        const next = isTeams
+          ? await getTeamImportJob(jobId, token)
+          : await getAccountImportJob(jobId, token)
         if (cancelled) return
         setJob(next)
         setError('')
         if (next.status === 'completed' || next.status === 'failed') {
-          sessionStorage.removeItem(ACTIVE_JOB_KEY)
+          sessionStorage.removeItem(activeJobKey)
           if (next.failedCount > 0) {
-            const page = await getAccountImportErrors(jobId, 1, 100, token)
+            const page = isTeams
+              ? await getTeamImportErrors(jobId, 1, 100, token)
+              : await getAccountImportErrors(jobId, 1, 100, token)
             if (!cancelled) {
               setErrorsPage(page)
               setErrorPageNumber(1)
@@ -116,7 +135,7 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
       cancelled = true
       if (timer) window.clearTimeout(timer)
     }
-  }, [jobId, job?.status])
+  }, [activeJobKey, isTeams, jobId, job?.status])
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null
@@ -175,9 +194,11 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
 
     setUploading(true)
     try {
-      const accepted = await bulkUploadAccounts(file, token)
+      const accepted = isTeams
+        ? await bulkUpdateTeams(file, token)
+        : await bulkUploadAccounts(file, token)
       setJobId(accepted.jobId)
-      sessionStorage.setItem(ACTIVE_JOB_KEY, accepted.jobId)
+      sessionStorage.setItem(activeJobKey, accepted.jobId)
       setJob(null)
     } catch (uploadError) {
       setError(apiErrorMessage(uploadError, 'Unable to upload the Excel file.'))
@@ -191,7 +212,9 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
     const token = getToken()
     if (!token) return
     try {
-      const next = await getAccountImportErrors(jobId, page, 100, token)
+      const next = isTeams
+        ? await getTeamImportErrors(jobId, page, 100, token)
+        : await getAccountImportErrors(jobId, page, 100, token)
       setErrorsPage(next)
       setErrorPageNumber(page)
     } catch (pageError) {
@@ -209,12 +232,17 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
       let page = 1
       let totalPages = 1
       do {
-        const result = await getAccountImportErrors(jobId, page, 100, token)
+        const result = isTeams
+          ? await getTeamImportErrors(jobId, page, 100, token)
+          : await getAccountImportErrors(jobId, page, 100, token)
         collected.push(...result.data.map(toBulkError))
         totalPages = result.totalPages
         page += 1
       } while (page <= totalPages)
-      downloadBulkErrorsCsv(collected)
+      downloadBulkErrorsCsv(
+        collected,
+        isTeams ? 'update-teams-errors' : 'bulk-upload-errors',
+      )
     } catch (downloadError) {
       setError(apiErrorMessage(downloadError, 'Unable to download failed rows.'))
     } finally {
@@ -223,7 +251,7 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
   }
 
   function reset() {
-    sessionStorage.removeItem(ACTIVE_JOB_KEY)
+    sessionStorage.removeItem(activeJobKey)
     setFile(null)
     setJobId('')
     setJob(null)
@@ -234,19 +262,29 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
   const hasResult = job?.status === 'completed' || job?.status === 'failed'
   const title = hasResult
     ? job.status === 'completed'
-      ? 'Bulk upload complete'
-      : 'Bulk upload failed'
+      ? isTeams
+        ? 'Team update complete'
+        : 'Bulk upload complete'
+      : isTeams
+        ? 'Team update failed'
+        : 'Bulk upload failed'
     : jobId
-      ? 'Importing accounts'
-      : 'Bulk upload accounts'
+      ? isTeams
+        ? 'Updating teams'
+        : 'Importing accounts'
+      : isTeams
+        ? 'Update teams'
+        : 'Bulk upload accounts'
 
   return (
     <Modal
       title={title}
       description={
         jobId
-          ? 'The import continues in the background. You may close this window and return later.'
-          : 'Select an Excel .xlsx file in the nivedan or accounts template format.'
+          ? 'The job continues in the background. You may close this window and return later.'
+          : isTeams
+            ? 'Select a nivedan Excel .xlsx file with Updated No. of Teams Expected filled in.'
+            : 'Select an Excel .xlsx file in the nivedan or accounts template format.'
       }
       labelledBy="bulk-upload-title"
       busy={busy}
@@ -260,7 +298,7 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
           </button>
           {hasResult && (
             <button type="button" className="btn btn-secondary" onClick={reset}>
-              Upload another file
+              {isTeams ? 'Update another file' : 'Upload another file'}
             </button>
           )}
           {job?.status === 'completed' && job.failedCount > 0 && (
@@ -280,7 +318,7 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
               onClick={() => void handleUpload()}
               disabled={uploading || !file}
             >
-              {uploading ? 'Uploading…' : 'Upload'}
+              {uploading ? 'Uploading…' : isTeams ? 'Update teams' : 'Upload'}
             </button>
           )}
         </div>
@@ -296,14 +334,16 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
             onChange={handleFileChange}
           />
           <div className="file-picker">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void downloadTemplate()}
-              disabled={uploading || downloadingTemplate}
-            >
-              {downloadingTemplate ? 'Downloading…' : 'Download template'}
-            </button>
+            {!isTeams && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => void downloadTemplate()}
+                disabled={uploading || downloadingTemplate}
+              >
+                {downloadingTemplate ? 'Downloading…' : 'Download template'}
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-secondary"
@@ -338,8 +378,10 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
                 {job?.totalRows
                   ? `Processed ${processed.toLocaleString()} of ${job.totalRows.toLocaleString()} rows (${percentage}%)`
                   : job?.status === 'processing'
-                    ? 'Reading and validating the Excel file…'
-                    : 'Waiting for an import worker…'}
+                    ? isTeams
+                      ? 'Updating team counts…'
+                      : 'Reading and validating the Excel file…'
+                    : 'Waiting for a worker to pick up the job…'}
               </p>
             </div>
           )}
@@ -351,7 +393,7 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
                 <span className="bulk-summary-value">{job.totalRows.toLocaleString()}</span>
               </div>
               <div className="bulk-summary-item">
-                <span className="bulk-summary-label">Created</span>
+                <span className="bulk-summary-label">{isTeams ? 'Updated' : 'Created'}</span>
                 <span className="bulk-summary-value">{job.createdCount.toLocaleString()}</span>
               </div>
               <div className="bulk-summary-item is-danger">
@@ -365,7 +407,9 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
             <p className={job.failedCount > 0 ? 'form-error' : 'form-success'}>
               {job.failedCount > 0
                 ? `${job.failedCount.toLocaleString()} rows failed. Review them below or download the CSV.`
-                : `Successfully created ${job.createdCount.toLocaleString()} accounts.`}
+                : isTeams
+                  ? `Successfully updated ${job.createdCount.toLocaleString()} accounts.`
+                  : `Successfully created ${job.createdCount.toLocaleString()} accounts.`}
             </p>
           )}
           {job?.status === 'failed' && (

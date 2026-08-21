@@ -1142,6 +1142,58 @@ select {
   max-width: 58ch;
 }
 
+.creation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.creation-toolbar .page-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.creation-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.creation-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.creation-tab:hover:not(.is-active) {
+  color: var(--text-h);
+  background: var(--surface-strong);
+}
+
+.creation-tab.is-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.creation-tab:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
 .creation-guide {
   margin-top: 28px;
   padding: 22px 24px 8px;
@@ -2096,6 +2148,28 @@ select {
 
   .page-actions .btn {
     flex: 1;
+  }
+
+  .creation-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .creation-tabs {
+    width: auto;
+    flex: 1 1 auto;
+  }
+
+  .creation-tab {
+    flex: 1;
+    text-align: center;
+  }
+
+  .creation-toolbar .page-actions {
+    width: auto;
+  }
+
+  .creation-toolbar .page-actions .btn {
+    flex: 0 0 auto;
   }
 
   .creation-guide {

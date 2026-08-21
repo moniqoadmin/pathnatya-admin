@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { downloadAccountBulkTemplate } from '../api/accounts'
 import BulkUploadDialog from '../components/BulkUploadDialog'
 import CreateAccountDialog from '../components/CreateAccountDialog'
-import { canCreateAccounts, canEditPrivilegedAccountFields } from '../lib/roles'
+import { canCreateAccounts, canEditPrivilegedAccountFields, canUpdateTeams } from '../lib/roles'
 import { getAccount, getToken } from '../lib/session'
+
+type CreationTab = 'create' | 'bulk' | 'teams'
 
 const OPTIONAL_COLUMNS = [
   { column: 'role', allowed: 'User, Admin, SuperAdmin, Developer (any case)', blank: 'User' },
@@ -101,18 +103,111 @@ const CREATE_FAQ = [
   },
 ] as const
 
+const UPDATE_TEAMS_ROW_ERRORS = [
+  { error: 'Mobile Number is missing', cause: 'Phone cell empty' },
+  { error: 'phone number is not 10 digits', cause: 'Not a supported 10-digit number' },
+  { error: 'number does not exist', cause: 'Phone is not already in the database' },
+  {
+    error: 'team number is not a valid number',
+    cause: 'Missing, 0, negative, decimal, or not an integer',
+  },
+  { error: 'duplicate mobile number in file', cause: 'Same phone appears twice in the sheet' },
+  {
+    error: 'numberOfTeams cannot be less than the N registered team(s)',
+    cause: 'New count is below teams that already have a password or device',
+  },
+] as const
+
+const UPDATE_TEAMS_JOB_FAILURES = [
+  { message: 'Could not read the uploaded Excel file', meaning: 'Corrupt / not a readable xlsx' },
+  { message: 'The uploaded Excel file has no sheets', meaning: 'Empty workbook' },
+  {
+    message: 'Could not find a sheet with a Mobile Number column',
+    meaning: 'Header row not found',
+  },
+  { message: 'Uploaded Excel file is no longer available', meaning: 'File bytes were already cleared' },
+  { message: 'Import failed', meaning: 'Unexpected processing error' },
+] as const
+
+const UPDATE_TEAMS_FAQ = [
+  {
+    question: 'Who can update teams?',
+    answer: 'Only SuperAdmin and Developer.',
+  },
+  {
+    question: 'Which column should I fill?',
+    answer:
+      'Fill Updated No. of Teams Expected in the nivedan sheet. If that updated column is not in the file, fill No. of Teams Expected instead.',
+  },
+  {
+    question: 'What if the sheet has Updated No. of Teams Expected but a cell is empty?',
+    answer:
+      'That row fails with “team number is not a valid number”, even if No. of Teams Expected has a value. The updated column is required when it is present.',
+  },
+  {
+    question: 'Do the phone numbers need to exist already?',
+    answer:
+      'Yes. This updates existing accounts. A phone that is not in the database fails with “number does not exist”.',
+  },
+  {
+    question: 'Can I lower the team count?',
+    answer:
+      'Not below teams that already have a password or a device. That row fails with “numberOfTeams cannot be less than the N registered team(s)”.',
+  },
+  {
+    question: 'If some rows fail, does the whole job fail?',
+    answer:
+      'No. Row errors do not fail the job. Status still becomes completed. Open errors when failedCount is greater than 0. Empty errors and total 0 means every row updated.',
+  },
+  {
+    question: 'What does the Updated count mean?',
+    answer: 'It is accounts updated, not accounts created.',
+  },
+] as const
+
+function defaultTab(canCreate: boolean, canBulk: boolean): CreationTab {
+  if (canCreate) {
+    return 'create'
+  }
+  if (canBulk) {
+    return 'bulk'
+  }
+  return 'teams'
+}
+
 export default function CreationPage() {
   const account = getAccount()
+  const canBulkUpload = canEditPrivilegedAccountFields(account?.role)
+  const canCreate = canCreateAccounts(account?.role)
+  const canUpdateTeamCounts = canUpdateTeams(account?.role)
+  const [tab, setTab] = useState<CreationTab>(() => defaultTab(canCreate, canBulkUpload))
   const [showCreate, setShowCreate] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
+  const [showUpdateTeams, setShowUpdateTeams] = useState(false)
   const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [templateError, setTemplateError] = useState('')
   const [status, setStatus] = useState<{ kind: 'success' | 'error'; text: string } | null>(
     null,
   )
 
-  const canBulkUpload = canEditPrivilegedAccountFields(account?.role)
-  const canCreate = canCreateAccounts(account?.role)
+  const tabs = [
+    { id: 'create' as const, label: 'Create', visible: canCreate },
+    { id: 'bulk' as const, label: 'Bulk upload', visible: canBulkUpload },
+    { id: 'teams' as const, label: 'Update Teams', visible: canUpdateTeamCounts },
+  ].filter((item) => item.visible)
+
+  const subtitle =
+    tab === 'create'
+      ? 'Create one account at a time.'
+      : tab === 'bulk'
+        ? 'Upload many accounts from an Excel sheet.'
+        : 'Update No. of Teams Expected from a nivedan sheet.'
+
+  function selectTab(next: CreationTab) {
+    setTab(next)
+    setStatus(null)
+    setTemplateError('')
+  }
 
   async function downloadTemplate() {
     setTemplateError('')
@@ -142,35 +237,70 @@ export default function CreationPage() {
         <div className="page-header-copy">
           <p className="eyebrow">Creation</p>
           <h1>Creation</h1>
-          <p className="page-subtitle">Create accounts one at a time, or upload many from an Excel sheet.</p>
+          <p className="page-subtitle">{subtitle}</p>
         </div>
+      </div>
 
-        {(canBulkUpload || canCreate) && (
+      <div className="creation-toolbar">
+        {tabs.length > 1 && (
+          <div className="creation-tabs" role="tablist" aria-label="Creation pages">
+            {tabs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`creation-tab-${item.id}`}
+                aria-selected={tab === item.id}
+                aria-controls={`creation-panel-${item.id}`}
+                className={`creation-tab${tab === item.id ? ' is-active' : ''}`}
+                onClick={() => selectTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === 'create' && canCreate && (
           <div className="page-actions">
-            {canBulkUpload && (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setStatus(null)
-                  setShowUpload(true)
-                }}
-              >
-                Bulk upload
-              </button>
-            )}
-            {canCreate && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  setStatus(null)
-                  setShowCreate(true)
-                }}
-              >
-                Create
-              </button>
-            )}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setStatus(null)
+                setShowCreate(true)
+              }}
+            >
+              + Create
+            </button>
+          </div>
+        )}
+        {tab === 'bulk' && canBulkUpload && (
+          <div className="page-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setStatus(null)
+                setShowUpload(true)
+              }}
+            >
+              + Bulk upload
+            </button>
+          </div>
+        )}
+        {tab === 'teams' && canUpdateTeamCounts && (
+          <div className="page-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setStatus(null)
+                setShowUpdateTeams(true)
+              }}
+            >
+              + Update Teams
+            </button>
           </div>
         )}
       </div>
@@ -179,8 +309,13 @@ export default function CreationPage() {
         <p className={status.kind === 'error' ? 'form-error' : 'form-success'}>{status.text}</p>
       )}
 
-      {canBulkUpload && (
-        <section className="creation-guide" aria-labelledby="bulk-upload-guide-title">
+      {tab === 'bulk' && canBulkUpload && (
+        <section
+          className="creation-guide"
+          role="tabpanel"
+          id="creation-panel-bulk"
+          aria-labelledby="creation-tab-bulk"
+        >
           <div className="creation-guide-intro">
             <h2 id="bulk-upload-guide-title">Bulk upload accounts</h2>
             <p>
@@ -328,8 +463,13 @@ export default function CreationPage() {
         </section>
       )}
 
-      {canCreate && (
-        <section className="creation-guide" aria-labelledby="create-account-guide-title">
+      {tab === 'create' && canCreate && (
+        <section
+          className="creation-guide"
+          role="tabpanel"
+          id="creation-panel-create"
+          aria-labelledby="creation-tab-create"
+        >
           <div className="creation-guide-intro">
             <h2 id="create-account-guide-title">Create one account</h2>
             <p>
@@ -450,7 +590,156 @@ export default function CreationPage() {
         </section>
       )}
 
-      {showUpload && <BulkUploadDialog onClose={() => setShowUpload(false)} />}
+      {tab === 'teams' && canUpdateTeamCounts && (
+        <section
+          className="creation-guide"
+          role="tabpanel"
+          id="creation-panel-teams"
+          aria-labelledby="creation-tab-teams"
+        >
+          <div className="creation-guide-intro">
+            <h2 id="update-teams-guide-title">Update teams</h2>
+            <p>
+              SuperAdmin and Developer only. Fill <strong>Updated No. of Teams Expected</strong> in
+              the nivedan sheet (or <strong>No. of Teams Expected</strong> if that updated column is
+              not in the file). This updates existing accounts — it does not create them.
+            </p>
+          </div>
+
+          <ol className="creation-guide-steps">
+            <li>
+              <h3>Prepare the nivedan sheet</h3>
+              <ul>
+                <li>
+                  Use a <strong>.xlsx</strong> nivedan file with a <strong>Mobile Number</strong>{' '}
+                  column. Title rows above the header are ignored.
+                </li>
+                <li>
+                  Fill <strong>Updated No. of Teams Expected</strong> with a whole number of 1 or
+                  more.
+                </li>
+                <li>
+                  If the updated column is not in the file, fill <strong>No. of Teams Expected</strong>{' '}
+                  instead.
+                </li>
+                <li>
+                  If the sheet has <strong>Updated No. of Teams Expected</strong>, that column is
+                  required. An empty updated cell fails even when <strong>No. of Teams Expected</strong>{' '}
+                  has a value.
+                </li>
+              </ul>
+            </li>
+
+            <li>
+              <h3>Upload the file</h3>
+              <ul>
+                <li>Use a <strong>.xlsx</strong> file — not .xls or CSV</li>
+                <li>Maximum size is <strong>20 MB</strong></li>
+                <li>Upload one file at a time</li>
+              </ul>
+              <p>
+                Click <strong>Update Teams</strong> and choose the file. The job is queued, then
+                processed. Status moves from <code>queued</code> to <code>processing</code>, then{' '}
+                <code>completed</code> or <code>failed</code>.
+              </p>
+            </li>
+
+            <li>
+              <h3>While the job runs</h3>
+              <p>
+                <strong>Updated</strong> is accounts updated, not accounts created. You can close the
+                window and come back — the job continues in the background.
+              </p>
+              <p>
+                Row errors do not fail the job. When status is <code>completed</code>, check the
+                failed count. If it is greater than 0, open errors. Empty errors means every row
+                updated.
+              </p>
+            </li>
+
+            <li>
+              <h3>If the whole job fails</h3>
+              <p>The file could not be processed at all. Typical messages:</p>
+              <div className="creation-guide-table-wrap">
+                <table className="creation-guide-table">
+                  <thead>
+                    <tr>
+                      <th>Message</th>
+                      <th>Meaning</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {UPDATE_TEAMS_JOB_FAILURES.map((row) => (
+                      <tr key={row.message}>
+                        <td>
+                          <code>{row.message}</code>
+                        </td>
+                        <td>{row.meaning}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </li>
+
+            <li>
+              <h3>Row errors</h3>
+              <p>Failed rows are skipped. The rest still update.</p>
+              <div className="creation-guide-table-wrap">
+                <table className="creation-guide-table">
+                  <thead>
+                    <tr>
+                      <th>Error</th>
+                      <th>Cause</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {UPDATE_TEAMS_ROW_ERRORS.map((row) => (
+                      <tr key={row.error}>
+                        <td>
+                          <code>{row.error}</code>
+                        </td>
+                        <td>{row.cause}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </li>
+
+            <li>
+              <h3>If the upload is rejected</h3>
+              <ul>
+                <li>No file uploaded, or the field name is not <code>file</code></li>
+                <li>Only <strong>.xlsx</strong> files are supported</li>
+                <li>Excel file must be smaller than 20 MB</li>
+                <li>The uploaded file is not a valid .xlsx file</li>
+                <li>Your account cannot perform this action (User / Admin)</li>
+                <li>Import queue is unavailable — try again shortly</li>
+              </ul>
+            </li>
+          </ol>
+
+          <section className="creation-faq" aria-labelledby="update-teams-faq-title">
+            <h2 id="update-teams-faq-title">FAQ</h2>
+            <p className="creation-faq-intro">Common questions about updating teams.</p>
+            <div className="creation-faq-list">
+              {UPDATE_TEAMS_FAQ.map((item) => (
+                <details key={item.question} className="solution-card">
+                  <summary>{item.question}</summary>
+                  <p className="creation-faq-answer">{item.answer}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        </section>
+      )}
+
+      {showUpload && <BulkUploadDialog kind="accounts" onClose={() => setShowUpload(false)} />}
+
+      {showUpdateTeams && (
+        <BulkUploadDialog kind="teams" onClose={() => setShowUpdateTeams(false)} />
+      )}
 
       {showCreate && (
         <CreateAccountDialog

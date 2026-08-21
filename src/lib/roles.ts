@@ -98,6 +98,10 @@ export function canEditPrivilegedAccountFields(role: string | null | undefined):
   return normalized === 'superadmin' || normalized === 'developer'
 }
 
+export function canUpdateTeams(role: string | null | undefined): boolean {
+  return canEditPrivilegedAccountFields(role)
+}
+
 export function canManageBulkFlags(role: string | null | undefined): boolean {
   return canEditPrivilegedAccountFields(role)
 }

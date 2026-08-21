@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { ApiError } from '../api/client'
 import {
   findActiveBulkFlagJob,
@@ -14,6 +15,8 @@ import {
   type SanghatFlagsSyncResult,
   type UpdateSanghatFlagsPayload,
 } from '../api/sanghat-flags'
+import Modal from '../components/Modal'
+import { ADMIN_HOME_PATH } from '../lib/roles'
 import { getToken } from '../lib/session'
 
 const POLL_INTERVAL_MS = 1_500
@@ -21,6 +24,9 @@ const ERROR_PAGE_SIZE = 100
 const HISTORY_PAGE_SIZE = 20
 const ENABLE_REASON_MIN_LENGTH = 10
 const ACTIVE_JOB_KEY = 'pathnatya.activeBulkFlagJobId'
+const SENSITIVE_TITLE = 'Highly sensitive page'
+const SENSITIVE_DESCRIPTION =
+  'This is a highly sensitive page which can make changes on a bulk scale.'
 
 const BOOLEAN_OPTIONS = [
   { value: 'true', label: 'True' },
@@ -94,6 +100,9 @@ function parseBoolean(value: string): boolean {
 }
 
 export default function BulkFlagsPage() {
+  const navigate = useNavigate()
+  const [confirmKind, setConfirmKind] = useState<'page' | 'update' | null>('page')
+  const [pendingPayload, setPendingPayload] = useState<UpdateSanghatFlagsPayload | null>(null)
   const [sanghats, setSanghats] = useState<string[]>([])
   const [sanghatsLoading, setSanghatsLoading] = useState(true)
   const [allAccounts, setAllAccounts] = useState(false)
@@ -372,7 +381,7 @@ export default function BulkFlagsPage() {
     }
   }
 
-  async function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError('')
     setStatus('')
@@ -385,6 +394,35 @@ export default function BulkFlagsPage() {
       return
     }
 
+    setPendingPayload(payload)
+    setConfirmKind('update')
+  }
+
+  function dismissSensitive() {
+    if (confirmKind === 'page') {
+      navigate(ADMIN_HOME_PATH)
+      return
+    }
+    setConfirmKind(null)
+    setPendingPayload(null)
+  }
+
+  function confirmSensitive() {
+    if (confirmKind === 'page') {
+      setConfirmKind(null)
+      return
+    }
+    if (!pendingPayload) {
+      setConfirmKind(null)
+      return
+    }
+    const payload = pendingPayload
+    setConfirmKind(null)
+    setPendingPayload(null)
+    void runUpdate(payload)
+  }
+
+  async function runUpdate(payload: UpdateSanghatFlagsPayload) {
     const token = getToken()
     if (!token) {
       setError('Your session expired. Please log in again.')
@@ -866,6 +904,40 @@ export default function BulkFlagsPage() {
           </div>
         </div>
       </section>
+
+      {confirmKind && (
+        <Modal
+          title={SENSITIVE_TITLE}
+          description={SENSITIVE_DESCRIPTION}
+          labelledBy="bulk-flags-sensitive-title"
+          busy={submitting}
+          dismissible={confirmKind === 'update'}
+          onClose={dismissSensitive}
+        >
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={dismissSensitive}
+              disabled={submitting}
+            >
+              {confirmKind === 'page' ? 'Go back' : 'Cancel'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={confirmSensitive}
+              disabled={submitting}
+            >
+              {confirmKind === 'page'
+                ? 'Continue'
+                : allAccounts
+                  ? 'Queue update'
+                  : 'Update sanghat'}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
