@@ -1,6 +1,7 @@
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import {
   bulkUploadAccounts,
+  downloadAccountBulkTemplate,
   getAccountImportErrors,
   getAccountImportJob,
   type AccountImportError,
@@ -65,6 +66,7 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
 
   const active = jobId !== '' && job?.status !== 'completed' && job?.status !== 'failed'
   const busy = uploading || active
@@ -139,6 +141,24 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
       return
     }
     setFile(next)
+  }
+
+  async function downloadTemplate() {
+    setError('')
+    const token = getToken()
+    if (!token) {
+      setError('Your session expired. Please log in again.')
+      return
+    }
+
+    setDownloadingTemplate(true)
+    try {
+      await downloadAccountBulkTemplate(token)
+    } catch (downloadError) {
+      setError(apiErrorMessage(downloadError, 'Unable to download the template.'))
+    } finally {
+      setDownloadingTemplate(false)
+    }
   }
 
   async function handleUpload() {
@@ -276,6 +296,14 @@ export default function BulkUploadDialog({ onClose }: BulkUploadDialogProps) {
             onChange={handleFileChange}
           />
           <div className="file-picker">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void downloadTemplate()}
+              disabled={uploading || downloadingTemplate}
+            >
+              {downloadingTemplate ? 'Downloading…' : 'Download template'}
+            </button>
             <button
               type="button"
               className="btn btn-secondary"

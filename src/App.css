@@ -1002,6 +1002,170 @@ select {
   margin-top: 20px;
 }
 
+.creation-page .page-subtitle {
+  max-width: 58ch;
+}
+
+.creation-guide {
+  margin-top: 28px;
+  padding: 22px 24px 8px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.creation-guide-intro h2 {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  color: var(--text-h);
+}
+
+.creation-guide-intro p {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  max-width: 72ch;
+}
+
+.creation-guide-steps {
+  margin: 18px 0 12px;
+  padding: 0;
+  list-style: none;
+  counter-reset: creation-step;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.creation-guide-steps > li {
+  counter-increment: creation-step;
+  padding: 16px 18px 16px 58px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-strong);
+  position: relative;
+}
+
+.creation-guide-steps > li::before {
+  content: counter(creation-step);
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.creation-guide-steps h3 {
+  margin: 0 0 8px;
+  font-size: 1.02rem;
+  color: var(--text-h);
+}
+
+.creation-guide-steps p,
+.creation-guide-steps ul {
+  margin: 0 0 10px;
+  color: var(--text);
+}
+
+.creation-guide-steps ul {
+  padding-left: 1.15em;
+}
+
+.creation-guide-steps li p:last-child,
+.creation-guide-steps li ul:last-child {
+  margin-bottom: 0;
+}
+
+.creation-guide-steps code {
+  font-size: 0.86em;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text-h);
+}
+
+.creation-guide-note {
+  color: var(--text-muted) !important;
+  font-size: 0.92rem;
+}
+
+.creation-guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+
+.creation-guide-table-wrap {
+  margin: 4px 0 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--input-bg);
+}
+
+.creation-guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.creation-guide-table th,
+.creation-guide-table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+
+.creation-guide-table th {
+  background: rgba(244, 185, 66, 0.16);
+  color: var(--text-h);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.creation-guide-table tr:last-child td {
+  border-bottom: none;
+}
+
+.creation-faq {
+  margin: 8px 0 20px;
+}
+
+.creation-faq h2 {
+  margin: 8px 0 6px;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  color: var(--text-h);
+}
+
+.creation-faq-intro {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+}
+
+.creation-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.creation-faq-answer {
+  margin: 0 0 14px;
+  color: var(--text);
+  max-width: 72ch;
+}
+
 .form-success {
   margin: 8px 0 0;
   padding: 10px 12px;
@@ -1737,6 +1901,14 @@ select {
 
   .page-actions .btn {
     flex: 1;
+  }
+
+  .creation-guide {
+    padding: 16px 14px 4px;
+  }
+
+  .creation-guide-steps > li {
+    padding: 14px 14px 14px 52px;
   }
 
   .form-grid,

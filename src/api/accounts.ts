@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, apiFetchBlob } from './client'
 
 export interface CheckPhoneResponse {
   exists: boolean
@@ -444,6 +444,20 @@ export function updateAccount(
     authToken,
     json: payload,
   })
+}
+
+export async function downloadAccountBulkTemplate(authToken: string): Promise<void> {
+  const { blob, filename } = await apiFetchBlob(
+    '/accounts/bulk/template',
+    { authToken },
+    'accounts-template.xlsx',
+  )
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 export function bulkUploadAccounts(
