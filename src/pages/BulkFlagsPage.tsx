@@ -761,6 +761,29 @@ export default function BulkFlagsPage() {
 
           {errorRows.length > 0 && (
             <>
+              {showingJobErrors && errorsPage && errorsPage.totalPages > 1 && (
+                <div className="bulk-error-pagination">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={errorPageNumber <= 1}
+                    onClick={() => void loadJobErrors(jobId, errorPageNumber - 1)}
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {errorPageNumber} of {errorsPage.totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={errorPageNumber >= errorsPage.totalPages}
+                    onClick={() => void loadJobErrors(jobId, errorPageNumber + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
               <div className="bulk-error-table-wrap">
                 <table className="bulk-error-table">
                   <thead>
@@ -787,29 +810,6 @@ export default function BulkFlagsPage() {
                   </tbody>
                 </table>
               </div>
-              {showingJobErrors && errorsPage && errorsPage.totalPages > 1 && (
-                <div className="bulk-error-pagination">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={errorPageNumber <= 1}
-                    onClick={() => void loadJobErrors(jobId, errorPageNumber - 1)}
-                  >
-                    Previous
-                  </button>
-                  <span>
-                    Page {errorPageNumber} of {errorsPage.totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={errorPageNumber >= errorsPage.totalPages}
-                    onClick={() => void loadJobErrors(jobId, errorPageNumber + 1)}
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
             </>
           )}
         </section>
@@ -822,6 +822,33 @@ export default function BulkFlagsPage() {
         </div>
 
         {historyError && <p className="form-error">{historyError}</p>}
+
+        <div className="users-pagination">
+          <p className="users-pagination-meta">
+            {historyLoading ? 'Loading...' : `Showing ${historyFrom}-${historyTo} of ${historyTotal}`}
+          </p>
+          <div className="users-pagination-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={historyLoading || historyPage <= 1}
+              onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+            >
+              Previous
+            </button>
+            <span className="users-page-indicator">
+              Page {historyPage} of {historyTotalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={historyLoading || historyPage >= historyTotalPages}
+              onClick={() => setHistoryPage((page) => page + 1)}
+            >
+              Next
+            </button>
+          </div>
+        </div>
 
         <div className="users-table-wrap">
           <table className="users-table bulk-flags-history-table">
@@ -875,33 +902,6 @@ export default function BulkFlagsPage() {
               )}
             </tbody>
           </table>
-        </div>
-
-        <div className="users-pagination">
-          <p className="users-pagination-meta">
-            {historyLoading ? 'Loading...' : `Showing ${historyFrom}-${historyTo} of ${historyTotal}`}
-          </p>
-          <div className="users-pagination-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={historyLoading || historyPage <= 1}
-              onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
-            >
-              Previous
-            </button>
-            <span className="users-page-indicator">
-              Page {historyPage} of {historyTotalPages}
-            </span>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={historyLoading || historyPage >= historyTotalPages}
-              onClick={() => setHistoryPage((page) => page + 1)}
-            >
-              Next
-            </button>
-          </div>
         </div>
       </section>
 

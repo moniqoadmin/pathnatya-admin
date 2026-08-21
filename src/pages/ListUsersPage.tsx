@@ -413,6 +413,33 @@ export default function ListUsersPage() {
       {error && <p className="form-error">{error}</p>}
       {status && <p className="form-success">{status}</p>}
 
+      <div className="users-pagination">
+        <p className="users-pagination-meta">
+          {loading ? 'Loading...' : `Showing ${from.toLocaleString()}-${to.toLocaleString()} of ${total.toLocaleString()}`}
+        </p>
+        <div className="users-pagination-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={loading || page <= 1}
+            onClick={() => handlePageChange(page - 1)}
+          >
+            Previous
+          </button>
+          <span className="users-page-indicator">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={loading || page >= totalPages}
+            onClick={() => handlePageChange(page + 1)}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
       <div className="users-table-wrap">
         <table className="users-table">
           <thead>
@@ -487,34 +514,6 @@ export default function ListUsersPage() {
           </tbody>
         </table>
       </div>
-
-      <div className="users-pagination">
-        <p className="users-pagination-meta">
-          {loading ? 'Loading...' : `Showing ${from.toLocaleString()}-${to.toLocaleString()} of ${total.toLocaleString()}`}
-        </p>
-        <div className="users-pagination-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={loading || page <= 1}
-            onClick={() => handlePageChange(page - 1)}
-          >
-            Previous
-          </button>
-          <span className="users-page-indicator">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={loading || page >= totalPages}
-            onClick={() => handlePageChange(page + 1)}
-          >
-            Next
-          </button>
-        </div>
-      </div>
-
     </div>
   )
 }

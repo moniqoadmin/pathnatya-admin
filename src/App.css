@@ -404,7 +404,8 @@ select {
 
 .app-content:has(.users-page),
 .app-content:has(.audit-trail-page),
-.app-content:has(.account-logs-page) {
+.app-content:has(.account-logs-page),
+.app-content:has(.bulk-flags-page) {
   width: min(100%, 1180px);
 }
 
@@ -415,11 +416,52 @@ select {
   margin: 24px 0 18px;
 }
 
+.users-page .users-toolbar {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.users-page .users-search-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .users-search {
   display: flex;
   flex-direction: column;
   gap: 6px;
   max-width: 420px;
+}
+
+.users-page .users-search {
+  flex: 1 1 220px;
+  max-width: 280px;
+  min-width: 180px;
+}
+
+.users-page .users-filters {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.users-page .role-filters {
+  flex-wrap: nowrap;
+}
+
+.users-page .users-sanghat-filter {
+  flex: 0 0 auto;
+  min-width: 180px;
+  width: 220px;
 }
 
 .users-search-label {
@@ -508,7 +550,8 @@ select {
 }
 
 .users-table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: min(62svh, 640px);
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
@@ -530,11 +573,14 @@ select {
 }
 
 .users-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   font-size: 0.75rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
-  background: rgba(255, 196, 64, 0.16);
+  background: color-mix(in srgb, var(--accent) 28%, var(--input-bg));
 }
 
 .users-table td {
@@ -569,7 +615,8 @@ select {
   padding: 28px 14px !important;
 }
 
-.audit-trail-page .users-table-wrap {
+.audit-trail-page .users-pagination,
+.account-logs-page .users-pagination {
   margin-top: 24px;
 }
 
@@ -578,8 +625,13 @@ select {
   min-width: 860px;
 }
 
-.account-logs-page .users-table-wrap {
-  margin-top: 24px;
+.users-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0 0 12px;
 }
 
 .audit-message-cell {
@@ -619,15 +671,6 @@ select {
   border-color: var(--danger-border);
   background: var(--danger-bg);
 }
-
-.users-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-}
-
 .users-pagination-meta,
 .users-page-indicator {
   margin: 0;
@@ -1299,6 +1342,7 @@ select {
 .creation-guide-table-wrap {
   margin: 4px 0 12px;
   overflow: auto;
+  max-height: min(48svh, 420px);
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--input-bg);
@@ -1306,6 +1350,7 @@ select {
 
 .creation-guide-table {
   width: 100%;
+  min-width: 520px;
   border-collapse: collapse;
   font-size: 0.88rem;
 }
@@ -1319,7 +1364,10 @@ select {
 }
 
 .creation-guide-table th {
-  background: rgba(244, 185, 66, 0.16);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--accent) 28%, var(--input-bg));
   color: var(--text-h);
   font-size: 0.75rem;
   letter-spacing: 0.04em;
@@ -1439,9 +1487,10 @@ select {
 .bulk-error-pagination {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 12px;
-  margin-top: 12px;
+  margin: 12px 0;
   color: var(--text-muted);
   font-size: 0.88rem;
 }
@@ -1623,6 +1672,7 @@ select {
 
 .bulk-error-table {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
   font-size: 0.85rem;
 }
@@ -2175,7 +2225,7 @@ select {
   justify-content: flex-start;
 }
 
-.bulk-flags-page .users-table-wrap {
+.bulk-flags-page .users-pagination {
   margin-top: 16px;
 }
 
@@ -2371,6 +2421,19 @@ select {
 
   .page-header {
     flex-direction: column;
+  }
+
+  .users-page .users-toolbar,
+  .users-page .users-filters,
+  .users-page .role-filters {
+    flex-wrap: wrap;
+  }
+
+  .users-page .users-search,
+  .users-page .users-sanghat-filter {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
   }
 
   .page-actions {

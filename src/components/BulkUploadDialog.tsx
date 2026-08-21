@@ -421,6 +421,29 @@ export default function BulkUploadDialog({
 
           {errorsPage && errorsPage.data.length > 0 && (
             <>
+              {errorsPage.totalPages > 1 && (
+                <div className="bulk-error-pagination">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={errorPageNumber <= 1}
+                    onClick={() => void changeErrorPage(errorPageNumber - 1)}
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {errorPageNumber} of {errorsPage.totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={errorPageNumber >= errorsPage.totalPages}
+                    onClick={() => void changeErrorPage(errorPageNumber + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
               <div className="bulk-error-table-wrap">
                 <table className="bulk-error-table">
                   <thead>
@@ -445,29 +468,6 @@ export default function BulkUploadDialog({
                   </tbody>
                 </table>
               </div>
-              {errorsPage.totalPages > 1 && (
-                <div className="bulk-error-pagination">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={errorPageNumber <= 1}
-                    onClick={() => void changeErrorPage(errorPageNumber - 1)}
-                  >
-                    Previous
-                  </button>
-                  <span>
-                    Page {errorPageNumber} of {errorsPage.totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={errorPageNumber >= errorsPage.totalPages}
-                    onClick={() => void changeErrorPage(errorPageNumber + 1)}
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
             </>
           )}
         </div>

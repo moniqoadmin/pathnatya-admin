@@ -123,6 +123,33 @@ export default function AuditTrailPage() {
 
       {error && <p className="form-error">{error}</p>}
 
+      <div className="users-pagination">
+        <p className="users-pagination-meta">
+          {loading ? 'Loading...' : `Showing ${from}-${to} of ${total}`}
+        </p>
+        <div className="users-pagination-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={loading || page <= 1}
+            onClick={() => handlePageChange(page - 1)}
+          >
+            Previous
+          </button>
+          <span className="users-page-indicator">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={loading || page >= totalPages}
+            onClick={() => handlePageChange(page + 1)}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
       <div className="users-table-wrap">
         <table className="users-table audit-trail-table">
           <thead>
@@ -164,33 +191,6 @@ export default function AuditTrailPage() {
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="users-pagination">
-        <p className="users-pagination-meta">
-          {loading ? 'Loading...' : `Showing ${from}-${to} of ${total}`}
-        </p>
-        <div className="users-pagination-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={loading || page <= 1}
-            onClick={() => handlePageChange(page - 1)}
-          >
-            Previous
-          </button>
-          <span className="users-page-indicator">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={loading || page >= totalPages}
-            onClick={() => handlePageChange(page + 1)}
-          >
-            Next
-          </button>
-        </div>
       </div>
     </div>
   )
