@@ -49,7 +49,7 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      {canViewLoginAnalytics(account.role) && showAnalytics && <LoginAnalytics />}
+      {canViewLoginAnalytics(account.role, showAnalytics) && <LoginAnalytics />}
 
       {SHOULD_SHOW_DOWNLOAD_PAGE_TO_ADMIN && canSeeAdminDownloads(account.role) && (
         <section className="dashboard-downloads">

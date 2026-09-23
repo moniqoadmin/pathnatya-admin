@@ -112,9 +112,15 @@ export function canViewAccountLogs(role: string | null | undefined): boolean {
   return normalized === 'superadmin' || normalized === 'developer'
 }
 
-export function canViewLoginAnalytics(role: string | null | undefined): boolean {
+export function canViewLoginAnalytics(
+  role: string | null | undefined,
+  analyticsEntitled = false,
+): boolean {
   const normalized = normalizeRole(role)
-  return normalized === 'superadmin' || normalized === 'developer'
+  if (normalized === 'superadmin' || normalized === 'developer') {
+    return true
+  }
+  return normalized === 'admin' && analyticsEntitled
 }
 
 export function canEditPrivilegedAccountFields(role: string | null | undefined): boolean {

@@ -14,7 +14,8 @@ const KNOWN_LABELS: Record<string, { title: string; description: string }> = {
   },
   SHOW_ANALYTICS: {
     title: 'Show analytics',
-    description: 'Show login analytics on the dashboard.',
+    description:
+      'Show login analytics on the dashboard for admins. Super admins always see analytics.',
   },
 }
 
