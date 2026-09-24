@@ -8,6 +8,7 @@ export type NavItemId =
   | 'solutions'
   | 'audit-trail'
   | 'entitlements'
+  | 'club-data'
 
 export const USER_HOME_PATH = '/download'
 export const ADMIN_HOME_PATH = '/dashboard'
@@ -26,10 +27,11 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'solutions', label: 'Solutions', path: '/solutions' },
   { id: 'audit-trail', label: 'Audit Trail', path: '/audit-trail' },
   { id: 'entitlements', label: 'Entitlements', path: '/entitlements' },
+  { id: 'club-data', label: 'Club data', path: '/club-data' },
 ]
 
 const ROLE_NAV: Record<Exclude<AppRole, 'user'>, NavItemId[]> = {
-  admin: ['dashboard', 'list-users', 'solutions'],
+  admin: ['dashboard', 'list-users', 'solutions', 'club-data'],
   superadmin: [
     'dashboard',
     'creation',
@@ -38,6 +40,7 @@ const ROLE_NAV: Record<Exclude<AppRole, 'user'>, NavItemId[]> = {
     'solutions',
     'audit-trail',
     'entitlements',
+    'club-data',
   ],
   developer: [
     'dashboard',
@@ -47,6 +50,7 @@ const ROLE_NAV: Record<Exclude<AppRole, 'user'>, NavItemId[]> = {
     'solutions',
     'audit-trail',
     'entitlements',
+    'club-data',
   ],
 }
 

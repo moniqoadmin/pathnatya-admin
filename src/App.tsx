@@ -4,6 +4,7 @@ import RequireRole from './components/RequireRole'
 import AuditTrailPage from './pages/AuditTrailPage'
 import BulkFlagsPage from './pages/BulkFlagsPage'
 import CreationPage from './pages/CreationPage'
+import ClubDataPage from './pages/ClubDataPage'
 import DashboardPage from './pages/DashboardPage'
 import DownloadPage from './pages/DownloadPage'
 import EntitlementsPage from './pages/EntitlementsPage'
@@ -100,6 +101,7 @@ function App() {
               <Route path="/solutions" element={<SolutionsPage />} />
               <Route path="/audit-trail" element={<AuditTrailPage />} />
               <Route path="/entitlements" element={<EntitlementsPage />} />
+              <Route path="/club-data" element={<ClubDataPage />} />
             </Route>
           </Route>
         </Route>

@@ -2374,6 +2374,337 @@ select {
   margin-top: 10px;
 }
 
+.club-data-page .page-subtitle {
+  max-width: 68ch;
+}
+
+.club-back {
+  margin-bottom: 14px;
+}
+
+.club-data-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.club-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.club-stats li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.club-stats strong {
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.club-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.club-notice span {
+  white-space: pre-wrap;
+}
+
+.club-data-tabs {
+  margin: 18px 0;
+}
+
+.club-columns {
+  margin-top: 18px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.club-columns summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.club-columns .form-error {
+  margin-top: 10px;
+}
+
+.club-column-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) minmax(140px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.club-column-row .form-error {
+  grid-column: 1 / -1;
+}
+
+.form-field > span,
+.club-filter {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.club-filter {
+  min-width: min(220px, 100%);
+}
+
+.club-column-label {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.club-column-actions {
+  margin-top: 14px;
+}
+
+.club-task-name {
+  display: block;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.club-task-description,
+.club-muted {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.club-task-name + .status-pill,
+.club-task-description + .status-pill {
+  margin-top: 8px;
+}
+
+.club-failure {
+  display: block;
+  margin-top: 6px;
+  color: var(--danger-text);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+}
+
+.club-upload-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.club-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.club-expected {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  max-width: 78ch;
+}
+
+.club-pending-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.club-pending-files li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  color: var(--text-h);
+  font-size: 0.92rem;
+}
+
+.club-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.club-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.club-file-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.club-mapping-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 160px;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.club-mapping-table {
+  min-width: 720px;
+}
+
+.club-mapping-table select,
+.club-field input,
+.club-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-h);
+  outline: none;
+}
+
+.club-mapping-table select:focus,
+.club-field input:focus,
+.club-field select:focus {
+  border-color: rgba(239, 122, 28, 0.7);
+}
+
+.club-review {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.club-review ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.club-error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.club-error-card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.club-error-card header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.club-error-card header strong {
+  color: var(--text-h);
+}
+
+.club-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.club-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+}
+
+.club-field.is-invalid {
+  border-color: var(--danger-border);
+}
+
+.club-field.is-valid {
+  border-color: var(--success-border);
+}
+
+.club-field-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.club-original,
+.club-field-message,
+.club-field-ok {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.club-original {
+  color: var(--text-muted);
+}
+
+.club-field-message {
+  color: var(--danger-text);
+}
+
+.club-field-ok {
+  color: var(--success-text);
+  font-weight: 700;
+}
+
+.club-problem-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--danger-text);
+}
+
+.club-empty {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -2442,6 +2773,19 @@ select {
 
   .page-actions .btn {
     flex: 1;
+  }
+
+  .club-data-actions {
+    justify-content: flex-start;
+  }
+
+  .club-data-actions .btn {
+    flex: 0 1 auto;
+  }
+
+  .club-column-row,
+  .club-mapping-fields {
+    grid-template-columns: 1fr;
   }
 
   .app-config-toolbar {
