@@ -16,6 +16,7 @@ import { DATA_TYPE_LABELS, apiErrorMessage, formatDate } from '../components/clu
 import Pager from '../components/club-data/Pager'
 import { parseClubTab, type ClubTab } from '../components/club-data/tabs'
 import { getToken } from '../lib/session'
+import { openFinalData } from '../lib/final-data'
 
 const PAGE_SIZE = 20
 
@@ -24,10 +25,11 @@ interface DraftColumn {
   label: string
   dataType: ExcelDataType
   required: boolean
+  primary: boolean
 }
 
 function emptyColumn(): DraftColumn {
-  return { id: crypto.randomUUID(), label: '', dataType: 'string', required: false }
+  return { id: crypto.randomUUID(), label: '', dataType: 'string', required: false, primary: false }
 }
 
 export default function ClubDataPage() {
@@ -117,7 +119,7 @@ function TaskList({ onOpen }: { onOpen: (taskId: string) => void }) {
           <p className="eyebrow">Operations</p>
           <h1>Club data</h1>
           <p className="page-subtitle">
-            Merge Excel files that share the same columns. The first file locks those column names.
+            Merge Excel files into one sheet. Upload a file, match its columns to the output format, then process it.
           </p>
         </div>
         <div className="page-actions">
@@ -139,7 +141,14 @@ function TaskList({ onOpen }: { onOpen: (taskId: string) => void }) {
       />
 
       <div className="users-table-wrap">
-        <table className="users-table">
+        <table className="users-table club-task-list">
+          <colgroup>
+            <col className="club-name-col" />
+            <col />
+            <col />
+            <col />
+            <col />
+          </colgroup>
           <thead>
             <tr>
               <th>Name</th>
@@ -159,12 +168,12 @@ function TaskList({ onOpen }: { onOpen: (taskId: string) => void }) {
             ) : (
               rows.map((task) => (
                 <tr key={task.id} className="is-clickable" onClick={() => onOpen(task.id)}>
-                  <td>
+                  <td className="club-task-cell">
                     <span className="club-task-name">{task.name}</span>
                     {task.description && <span className="club-task-description">{task.description}</span>}
-                    {task.schemaFrozen && (
-                      <span className="status-pill status-queued" title="Column names are locked from the first file">
-                        Columns locked
+                    {task.columnCount > 0 && (
+                      <span className="club-muted">
+                        {task.columnCount} output {task.columnCount === 1 ? 'column' : 'columns'}
                       </span>
                     )}
                   </td>
@@ -180,30 +189,52 @@ function TaskList({ onOpen }: { onOpen: (taskId: string) => void }) {
                         className="btn btn-secondary btn-compact"
                         onClick={(event) => {
                           event.stopPropagation()
-                          onOpen(task.id)
+                          openFinalData(task.id)
                         }}
                       >
-                        Open
+                        Data
                       </button>
                       <button
                         type="button"
-                        className="btn btn-secondary btn-compact"
+                        className="btn btn-secondary btn-compact club-icon-btn"
+                        aria-label={`Rename ${task.name}`}
+                        title="Rename"
                         onClick={(event) => {
                           event.stopPropagation()
                           setEditing(task)
                         }}
                       >
-                        Rename
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M4 20h4.2L19.5 8.7a2.1 2.1 0 0 0 0-3L18.3 4.5a2.1 2.1 0 0 0-3 0L4 15.8V20z"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinejoin="round"
+                          />
+                          <path d="M13.2 6.3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                        </svg>
                       </button>
                       <button
                         type="button"
-                        className="btn btn-secondary btn-compact"
+                        className="btn btn-unable btn-compact club-icon-btn"
+                        aria-label={`Delete ${task.name}`}
+                        title="Delete"
                         onClick={(event) => {
                           event.stopPropagation()
                           setDeleting(task)
                         }}
                       >
-                        Delete
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M4.5 7h15M9 7V4.8h6V7M7.2 7l.8 12.2h8l.8-12.2"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
                       </button>
                     </div>
                   </td>
@@ -274,20 +305,18 @@ function CreateTaskDialog({
     }
 
     const payloadColumns: ExcelMergeColumnInput[] = []
-    const seen = new Set<string>()
     for (const column of columns) {
       const label = column.label.trim()
       if (!label) {
         setError('Enter a label for each column, or remove the empty row.')
         return
       }
-      const key = label.toLowerCase()
-      if (seen.has(key)) {
-        setError(`Column “${label}” is listed more than once.`)
-        return
-      }
-      seen.add(key)
-      payloadColumns.push({ label, dataType: column.dataType, required: column.required })
+      payloadColumns.push({
+        label,
+        dataType: column.dataType,
+        required: column.required,
+        ...(column.primary ? { primary: true } : {}),
+      })
     }
 
     setSaving(true)
@@ -311,7 +340,7 @@ function CreateTaskDialog({
   return (
     <Modal
       title="Create task"
-      description="A name is enough. Columns can come from the first Excel file you upload."
+      description="A name is enough. You can add output columns now, or add them when you match a file. One column can be primary."
       labelledBy="club-create-title"
       busy={saving}
       wide
@@ -333,70 +362,105 @@ function CreateTaskDialog({
           onChange={(event) => setDescription(event.target.value)}
           disabled={saving}
         />
-        <p className="field-hint">Optional columns. Leave this empty to take them from the first file.</p>
-        {columns.map((column) => (
-          <div key={column.id} className="club-column-row">
-            <label className="form-field">
-              <span>Label</span>
+        <p className="field-hint">
+          Optional output columns. These columns will appear in your final Excel file. You can also add them later.
+        </p>
+        {columns.length > 0 && (
+          <div role="radiogroup" aria-label="Primary column">
+            <label className="checkbox-field club-primary-none">
               <input
-                value={column.label}
+                type="radio"
+                name="club-create-primary"
+                checked={!columns.some((column) => column.primary)}
                 disabled={saving}
-                onChange={(event) =>
-                  setColumns((current) =>
-                    current.map((item) =>
-                      item.id === column.id ? { ...item, label: event.target.value } : item,
-                    ),
-                  )
-                }
+                onChange={() => setColumns((current) => current.map((item) => ({ ...item, primary: false })))}
               />
+              No primary column
             </label>
-            <label className="form-field">
-              <span>Type</span>
-              <select
-                value={column.dataType}
-                disabled={saving}
-                onChange={(event) =>
-                  setColumns((current) =>
-                    current.map((item) =>
-                      item.id === column.id
-                        ? { ...item, dataType: event.target.value as ExcelDataType }
-                        : item,
-                    ),
-                  )
-                }
-              >
-                {EXCEL_DATA_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {DATA_TYPE_LABELS[type]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={column.required}
-                disabled={saving}
-                onChange={(event) =>
-                  setColumns((current) =>
-                    current.map((item) =>
-                      item.id === column.id ? { ...item, required: event.target.checked } : item,
-                    ),
-                  )
-                }
-              />
-              Required
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary btn-compact"
-              disabled={saving}
-              onClick={() => setColumns((current) => current.filter((item) => item.id !== column.id))}
-            >
-              Remove
-            </button>
+            {columns.map((column) => (
+              <div key={column.id} className="club-column-row">
+                <label className="form-field">
+                  <span>
+                    Label
+                    {column.primary && <span className="club-primary-badge">Primary</span>}
+                  </span>
+                  <input
+                    value={column.label}
+                    disabled={saving}
+                    onChange={(event) =>
+                      setColumns((current) =>
+                        current.map((item) =>
+                          item.id === column.id ? { ...item, label: event.target.value } : item,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Type</span>
+                  <select
+                    value={column.dataType}
+                    disabled={saving}
+                    onChange={(event) =>
+                      setColumns((current) =>
+                        current.map((item) =>
+                          item.id === column.id
+                            ? { ...item, dataType: event.target.value as ExcelDataType }
+                            : item,
+                        ),
+                      )
+                    }
+                  >
+                    {EXCEL_DATA_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {DATA_TYPE_LABELS[type]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="club-column-flags">
+                  <label className="checkbox-field">
+                    <input
+                      type="checkbox"
+                      checked={column.required}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setColumns((current) =>
+                          current.map((item) =>
+                            item.id === column.id ? { ...item, required: event.target.checked } : item,
+                          ),
+                        )
+                      }
+                    />
+                    Required
+                  </label>
+                  <label className="checkbox-field">
+                    <input
+                      type="radio"
+                      name="club-create-primary"
+                      checked={column.primary}
+                      disabled={saving}
+                      onChange={() =>
+                        setColumns((current) =>
+                          current.map((item) => ({ ...item, primary: item.id === column.id })),
+                        )
+                      }
+                    />
+                    Set as primary
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-compact"
+                  disabled={saving}
+                  onClick={() => setColumns((current) => current.filter((item) => item.id !== column.id))}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
         <div className="club-inline-actions">
           <button
             type="button"

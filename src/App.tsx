@@ -5,6 +5,7 @@ import AuditTrailPage from './pages/AuditTrailPage'
 import BulkFlagsPage from './pages/BulkFlagsPage'
 import CreationPage from './pages/CreationPage'
 import ClubDataPage from './pages/ClubDataPage'
+import FinalDataPage from './pages/FinalDataPage'
 import DashboardPage from './pages/DashboardPage'
 import DownloadPage from './pages/DownloadPage'
 import EntitlementsPage from './pages/EntitlementsPage'
@@ -92,6 +93,9 @@ function App() {
           <Route path="/download" element={<DownloadPage />} />
         </Route>
         <Route element={<RequireAuth />}>
+          <Route element={<RequireRole />}>
+            <Route path="/club-data/:taskId/final" element={<FinalDataPage />} />
+          </Route>
           <Route element={<AppLayout />}>
             <Route element={<RequireRole />}>
               <Route path="/dashboard" element={<DashboardPage />} />

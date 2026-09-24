@@ -33,6 +33,7 @@ export interface ExcelMergeColumnInput {
   label: string
   dataType: ExcelDataType
   required: boolean
+  primary?: boolean
 }
 
 export interface ExcelMergeColumn {
@@ -41,6 +42,7 @@ export interface ExcelMergeColumn {
   label: string
   dataType: ExcelDataType
   required: boolean
+  primary: boolean
   sortOrder: number
 }
 
@@ -49,8 +51,6 @@ export interface ExcelMergeTaskSummary {
   name: string
   description: string | null
   createdBy: string
-  frozenHeaders: string[]
-  schemaFrozen: boolean
   columnCount: number
   fileCount: number
   validCount: number
@@ -96,6 +96,10 @@ export interface ExcelSuggestedMapping {
   action: 'map' | 'ignore' | 'unmapped' | 'create'
   columnKey?: string | null
   columnLabel?: string | null
+  label?: string | null
+  dataType?: string | null
+  required?: boolean
+  primary?: boolean
   reason?: 'saved' | 'name_match' | 'unmapped' | string
 }
 
@@ -160,6 +164,7 @@ export interface ExcelMergeErrorField {
   label: string
   dataType: ExcelDataType
   required: boolean
+  primary: boolean
   currentValue: ExcelCellValue
   originalValue: ExcelCellValue
   valid: boolean
@@ -189,6 +194,10 @@ export interface ExcelMergeMappingEntry {
   sourceHeader: string
   action: 'map' | 'ignore' | 'create'
   columnKey?: string
+  label?: string
+  dataType?: ExcelDataType
+  required?: boolean
+  primary?: boolean
 }
 
 export interface ConfirmExcelMergeMappingPayload {
@@ -208,6 +217,7 @@ export interface PatchExcelMergeColumnPayload {
   label?: string
   dataType?: ExcelDataType
   required?: boolean
+  primary?: boolean
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -248,21 +258,79 @@ function asPage<T>(body: unknown, fallbackLimit: number): ExcelMergePage<T> {
   }
 }
 
+function asTaskSummary(body: unknown): ExcelMergeTaskSummary {
+  const record = asRecord(body) ?? {}
+  return {
+    id: typeof record.id === 'string' ? record.id : '',
+    name: typeof record.name === 'string' ? record.name : '',
+    description: typeof record.description === 'string' ? record.description : null,
+    createdBy: typeof record.createdBy === 'string' ? record.createdBy : '',
+    columnCount: asNumber(record.columnCount, 0),
+    fileCount: asNumber(record.fileCount, 0),
+    validCount: asNumber(record.validCount, 0),
+    pendingErrorCount: asNumber(record.pendingErrorCount, 0),
+    createdAt: typeof record.createdAt === 'string' ? record.createdAt : '',
+    updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : '',
+  }
+}
+
+export function toExcelDataType(value: unknown): ExcelDataType {
+  if (typeof value === 'string' && (EXCEL_DATA_TYPES as readonly string[]).includes(value)) {
+    return value as ExcelDataType
+  }
+  return 'string'
+}
+
+function asColumn(value: unknown): ExcelMergeColumn | null {
+  const record = asRecord(value)
+  if (!record) {
+    return null
+  }
+  const id = typeof record.id === 'string' ? record.id : ''
+  const key = typeof record.key === 'string' ? record.key : ''
+  if (!id && !key) {
+    return null
+  }
+  return {
+    id,
+    key,
+    label: typeof record.label === 'string' ? record.label : key,
+    dataType: toExcelDataType(record.dataType),
+    required: record.required === true,
+    primary: record.primary === true,
+    sortOrder: asNumber(record.sortOrder, 0),
+  }
+}
+
 function asTask(body: unknown): ExcelMergeTask {
   const record = asRecord(body)
-  const source = (asRecord(record?.task) ?? asRecord(record?.data) ?? record ?? {}) as unknown as ExcelMergeTask
+  const source = asRecord(record?.task) ?? asRecord(record?.data) ?? record ?? {}
+  const summary = asTaskSummary(source)
+  const columns = Array.isArray(source.columns)
+    ? source.columns.flatMap((column) => {
+        const parsed = asColumn(column)
+        return parsed ? [parsed] : []
+      })
+    : []
+  const columnMappings = asRecord(source.columnMappings) ?? {}
   return {
-    ...source,
-    description: source.description ?? null,
-    frozenHeaders: Array.isArray(source.frozenHeaders) ? source.frozenHeaders : [],
-    columns: Array.isArray(source.columns) ? source.columns : [],
-    columnMappings:
-      source.columnMappings && typeof source.columnMappings === 'object' ? source.columnMappings : {},
-    schemaFrozen: Boolean(source.schemaFrozen),
-    columnCount: asNumber(source.columnCount, source.columns?.length ?? 0),
-    fileCount: asNumber(source.fileCount, 0),
-    validCount: asNumber(source.validCount, 0),
-    pendingErrorCount: asNumber(source.pendingErrorCount, 0),
+    ...summary,
+    columnCount: asNumber(source.columnCount, columns.length),
+    columns,
+    columnMappings,
+  }
+}
+
+function withErrorPrimary(row: ExcelMergeErrorRow): ExcelMergeErrorRow {
+  return {
+    ...row,
+    fields: Array.isArray(row?.fields)
+      ? row.fields.map((field) => ({
+          ...field,
+          primary: field?.primary === true,
+          dataType: toExcelDataType(field?.dataType),
+        }))
+      : [],
   }
 }
 
@@ -321,9 +389,10 @@ export function listExcelMergeTasks(
   limit: number,
   authToken: string,
 ): Promise<ExcelMergePage<ExcelMergeTaskSummary>> {
-  return apiFetch<unknown>(`/excel-merge/tasks${query({ page, limit })}`, { authToken }).then((body) =>
-    asPage<ExcelMergeTaskSummary>(body, limit),
-  )
+  return apiFetch<unknown>(`/excel-merge/tasks${query({ page, limit })}`, { authToken }).then((body) => {
+    const pageResult = asPage<unknown>(body, limit)
+    return { ...pageResult, data: pageResult.data.map((item) => asTaskSummary(item)) }
+  })
 }
 
 export function createExcelMergeTask(
@@ -351,6 +420,60 @@ export function updateExcelMergeTask(
     authToken,
     json: payload,
   }).then(asTask)
+}
+
+export interface ExcelMergeSummary {
+  rowColumn?: string
+  columnColumn?: string
+  totalLabel?: string
+  metrics?: unknown
+}
+
+function isSummaryRecord(record: Record<string, unknown>): boolean {
+  return 'rowColumn' in record || 'columnColumn' in record || 'totalLabel' in record || 'metrics' in record
+}
+
+function asSummary(body: unknown): ExcelMergeSummary | null {
+  const record = asRecord(body)
+  if (!record) {
+    return null
+  }
+  if (isSummaryRecord(record)) {
+    return record as ExcelMergeSummary
+  }
+  const nested = asRecord(record.summary) ?? asRecord(record.data)
+  if (nested && isSummaryRecord(nested)) {
+    return nested as ExcelMergeSummary
+  }
+  return null
+}
+
+export async function getExcelMergeSummary(
+  taskId: string,
+  authToken: string,
+): Promise<ExcelMergeSummary | null> {
+  try {
+    const body = await apiFetch<unknown>(`/excel-merge/tasks/${encodeURIComponent(taskId)}/summary`, { authToken })
+    return asSummary(body)
+  } catch (error) {
+    const status = (error as { status?: number }).status
+    if (status === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+export function updateExcelMergeSummary(
+  taskId: string,
+  summary: ExcelMergeSummary,
+  authToken: string,
+): Promise<void> {
+  return apiFetch(`/excel-merge/tasks/${encodeURIComponent(taskId)}/summary`, {
+    method: 'PUT',
+    authToken,
+    json: summary,
+  }).then(() => undefined)
 }
 
 export function deleteExcelMergeTask(taskId: string, authToken: string): Promise<void> {
@@ -476,25 +599,94 @@ export function processExcelMergeFile(
   ).then(asFile)
 }
 
+export interface ExcelMergeDataQuery {
+  fileId?: string
+  sort?: string
+  order?: 'asc' | 'desc'
+}
+
+export interface CreateExcelMergeDataPayload {
+  fileId?: string
+  sourceRowNumber?: number
+  values: Record<string, ExcelCellValue>
+}
+
 export function listExcelMergeData(
   taskId: string,
   page: number,
   limit: number,
   authToken: string,
-  fileId?: string,
+  options: ExcelMergeDataQuery = {},
 ): Promise<ExcelMergeDataPage> {
+  const sort = options.sort?.trim()
+  const boundedLimit = Math.min(200, Math.max(1, limit))
   return apiFetch<unknown>(
     `/excel-merge/tasks/${encodeURIComponent(taskId)}/data${query({
       page,
-      limit,
-      fileId: fileId || undefined,
+      limit: boundedLimit,
+      fileId: options.fileId || undefined,
+      ...(sort ? { sort, order: options.order === 'desc' ? 'desc' : 'asc' } : {}),
     })}`,
     { authToken },
   ).then((body) => {
     const record = asRecord(body)
-    const pageBody = asPage<ExcelMergeDataRow>(body, limit)
-    const columns = Array.isArray(record?.columns) ? (record.columns as ExcelMergeDataColumn[]) : []
+    const pageBody = asPage<ExcelMergeDataRow>(body, boundedLimit)
+    const columns = Array.isArray(record?.columns)
+      ? record.columns.flatMap((column) => {
+          const parsed = asRecord(column)
+          if (!parsed || typeof parsed.key !== 'string' || !parsed.key) {
+            return []
+          }
+          return [
+            {
+              key: parsed.key,
+              label: typeof parsed.label === 'string' ? parsed.label : parsed.key,
+              dataType: toExcelDataType(parsed.dataType),
+            },
+          ]
+        })
+      : []
     return { ...pageBody, columns }
+  })
+}
+
+export function createExcelMergeData(
+  taskId: string,
+  payload: CreateExcelMergeDataPayload,
+  authToken: string,
+): Promise<void> {
+  return apiFetch(`/excel-merge/tasks/${encodeURIComponent(taskId)}/data`, {
+    method: 'POST',
+    authToken,
+    json: payload,
+  })
+}
+
+export function updateExcelMergeData(
+  taskId: string,
+  dataId: string,
+  payload: { values: Record<string, ExcelCellValue> },
+  authToken: string,
+): Promise<void> {
+  return apiFetch(`/excel-merge/tasks/${encodeURIComponent(taskId)}/data/${encodeURIComponent(dataId)}`, {
+    method: 'PATCH',
+    authToken,
+    json: payload,
+  })
+}
+
+export function deleteExcelMergeData(taskId: string, dataId: string, authToken: string): Promise<void> {
+  return apiFetch(`/excel-merge/tasks/${encodeURIComponent(taskId)}/data/${encodeURIComponent(dataId)}`, {
+    method: 'DELETE',
+    authToken,
+  })
+}
+
+export function deleteExcelMergeDataRows(taskId: string, ids: string[], authToken: string): Promise<void> {
+  return apiFetch(`/excel-merge/tasks/${encodeURIComponent(taskId)}/data`, {
+    method: 'DELETE',
+    authToken,
+    json: { ids },
   })
 }
 
@@ -514,7 +706,25 @@ export function listExcelMergeErrors(
       fileId: fileId || undefined,
     })}`,
     { authToken },
-  ).then((body) => asPage<ExcelMergeErrorRow>(body, limit))
+  ).then((body) => {
+    const pageResult = asPage<ExcelMergeErrorRow>(body, limit)
+    return { ...pageResult, data: pageResult.data.map((row) => withErrorPrimary(row)) }
+  })
+}
+
+export function deleteExcelMergeError(taskId: string, errorId: string, authToken: string): Promise<void> {
+  return apiFetch(`/excel-merge/tasks/${encodeURIComponent(taskId)}/errors/${encodeURIComponent(errorId)}`, {
+    method: 'DELETE',
+    authToken,
+  })
+}
+
+export function deleteExcelMergeErrors(taskId: string, ids: string[], authToken: string): Promise<void> {
+  return apiFetch(`/excel-merge/tasks/${encodeURIComponent(taskId)}/errors`, {
+    method: 'DELETE',
+    authToken,
+    json: { ids },
+  })
 }
 
 export function updateExcelMergeError(
@@ -530,12 +740,33 @@ export function updateExcelMergeError(
       authToken,
       json: payload,
     },
-  )
+  ).then((result) => {
+    if (!result?.row) {
+      return result
+    }
+    return { ...result, row: withErrorPrimary(result.row) }
+  })
 }
 
-export async function downloadExcelMergeExport(taskId: string, authToken: string): Promise<void> {
+export async function downloadExcelMergeExport(
+  taskId: string,
+  authToken: string,
+  options: {
+    sort?: string
+    order?: 'asc' | 'desc'
+    rowColumn?: string
+    columnColumn?: string
+    totalLabel?: string
+  } = {},
+): Promise<void> {
+  const sort = options.sort?.trim()
   const { blob, filename } = await apiFetchBlob(
-    `/excel-merge/tasks/${encodeURIComponent(taskId)}/export`,
+    `/excel-merge/tasks/${encodeURIComponent(taskId)}/export${query({
+      ...(sort ? { sort, order: options.order === 'desc' ? 'desc' : 'asc' } : {}),
+      rowColumn: options.rowColumn?.trim() || undefined,
+      columnColumn: options.columnColumn?.trim() || undefined,
+      totalLabel: options.totalLabel?.trim() || undefined,
+    })}`,
     { authToken },
     'club-data.xlsx',
   )

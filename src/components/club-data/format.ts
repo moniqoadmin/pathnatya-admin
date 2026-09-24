@@ -11,12 +11,12 @@ export const DATA_TYPE_LABELS: Record<ExcelDataType, string> = {
 }
 
 const FILE_STATUS_LABELS: Record<ExcelFileStatus, string> = {
-  uploaded: 'Uploaded',
-  analyzed: 'Ready to map',
+  uploaded: 'Reading file',
+  analyzed: 'Needs column matching',
   mapping_confirmed: 'Ready to process',
   processing: 'Processing',
   processed: 'Processed',
-  failed: 'Failed',
+  failed: 'Could not read file',
 }
 
 export function apiErrorMessage(error: unknown, fallback: string): string {
@@ -28,6 +28,17 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
     return error.message.trim()
   }
   return fallback
+}
+
+export function splitReasons(message: string | null | undefined): string[] {
+  if (!message?.trim()) {
+    return []
+  }
+  const parts = message
+    .split('; ')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  return parts.length > 0 ? parts : [message.trim()]
 }
 
 export function formatDate(value: string | null | undefined): string {
@@ -103,6 +114,22 @@ export function sortedColumns(columns: ExcelMergeColumn[]): ExcelMergeColumn[] {
     const order = (left.sortOrder ?? 0) - (right.sortOrder ?? 0)
     return order || left.label.localeCompare(right.label)
   })
+}
+
+export function fileStep(file: {
+  status: string
+  validCount?: number
+  errorCount?: number
+}): string {
+  if (file.status === 'processed') {
+    const valid = file.validCount ?? 0
+    const errors = file.errorCount ?? 0
+    return `${valid.toLocaleString()} valid · ${errors.toLocaleString()} ${errors === 1 ? 'error' : 'errors'}`
+  }
+  if (file.status === 'mapping_confirmed') {
+    return 'Ready'
+  }
+  return fileStatusLabel(file.status)
 }
 
 export function fileStatusLabel(status: string): string {

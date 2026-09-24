@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   EXCEL_DATA_TYPES,
   addExcelMergeColumns,
@@ -24,6 +24,8 @@ interface DraftColumn {
   required: boolean
 }
 
+type PrimarySelection = { source: 'server' } | { source: 'draft'; id: string } | { source: 'none' } | { source: 'column'; id: string }
+
 function emptyDraft(): DraftColumn {
   return {
     id: crypto.randomUUID(),
@@ -34,18 +36,82 @@ function emptyDraft(): DraftColumn {
 }
 
 export default function ColumnEditor({ task, onSaved }: ColumnEditorProps) {
-  const namesLocked = task.schemaFrozen
   const columns = sortedColumns(task.columns)
-  const detailsRef = useRef<HTMLDetailsElement>(null)
   const [drafts, setDrafts] = useState<DraftColumn[]>([])
+  const [primarySelection, setPrimarySelection] = useState<PrimarySelection>({ source: 'server' })
   const [error, setError] = useState('')
   const [adding, setAdding] = useState(false)
+  const [primarySaving, setPrimarySaving] = useState(false)
+  const primaryName = `club-output-primary-${task.id}`
+  const serverPrimary = columns.find((column) => column.primary)
 
   useEffect(() => {
-    if (detailsRef.current) {
-      detailsRef.current.open = !task.schemaFrozen
+    setPrimarySelection({ source: 'server' })
+    setDrafts([])
+  }, [task.id])
+
+  function columnIsPrimary(column: ExcelMergeColumn): boolean {
+    if (primarySelection.source === 'draft' || primarySelection.source === 'none') {
+      return false
     }
-  }, [task.id, task.schemaFrozen])
+    if (primarySelection.source === 'column') {
+      return primarySelection.id === column.id
+    }
+    return column.primary
+  }
+
+  function noneIsPrimary(): boolean {
+    if (primarySelection.source === 'none') {
+      return true
+    }
+    if (primarySelection.source === 'server') {
+      return !serverPrimary
+    }
+    return false
+  }
+
+  async function patchPrimary(columnId: string, primary: boolean) {
+    const token = getToken()
+    if (!token) {
+      setError('Your session expired. Please log in again.')
+      setPrimarySelection({ source: 'server' })
+      return
+    }
+    setPrimarySaving(true)
+    setError('')
+    try {
+      await updateExcelMergeColumn(task.id, columnId, { primary }, token)
+      await onSaved()
+      setPrimarySelection({ source: 'server' })
+    } catch (saveError) {
+      setPrimarySelection({ source: 'server' })
+      setError(apiErrorMessage(saveError, primary ? 'Unable to set the primary column.' : 'Unable to clear the primary column.'))
+    } finally {
+      setPrimarySaving(false)
+    }
+  }
+
+  function chooseDraftPrimary(id: string) {
+    setPrimarySelection({ source: 'draft', id })
+    setError('')
+  }
+
+  function chooseColumnPrimary(column: ExcelMergeColumn) {
+    if (column.primary && primarySelection.source === 'server') {
+      return
+    }
+    setPrimarySelection({ source: 'column', id: column.id })
+    void patchPrimary(column.id, true)
+  }
+
+  function chooseNoPrimary() {
+    setPrimarySelection({ source: 'none' })
+    if (serverPrimary) {
+      void patchPrimary(serverPrimary.id, false)
+      return
+    }
+    setError('')
+  }
 
   async function addColumns() {
     const token = getToken()
@@ -58,21 +124,16 @@ export default function ColumnEditor({ task, onSaved }: ColumnEditorProps) {
     for (const draft of drafts) {
       const label = draft.label.trim()
       if (!label) {
-        setError('Enter a label for each new column, or remove the empty row.')
+        setError('Enter a name for each new output column, or remove the empty row.')
         return
       }
-      payload.push({ label, dataType: draft.dataType, required: draft.required })
-    }
-
-    const existing = new Set(columns.map((column) => column.label.trim().toLowerCase()))
-    const seen = new Set<string>()
-    for (const column of payload) {
-      const key = column.label.toLowerCase()
-      if (existing.has(key) || seen.has(key)) {
-        setError(`Column “${column.label}” is already in this list.`)
-        return
-      }
-      seen.add(key)
+      const makePrimary = primarySelection.source === 'draft' && primarySelection.id === draft.id
+      payload.push({
+        label,
+        dataType: draft.dataType,
+        required: draft.required,
+        ...(makePrimary ? { primary: true } : {}),
+      })
     }
 
     setAdding(true)
@@ -80,110 +141,152 @@ export default function ColumnEditor({ task, onSaved }: ColumnEditorProps) {
     try {
       await addExcelMergeColumns(task.id, payload, token)
       setDrafts([])
+      setPrimarySelection({ source: 'server' })
       await onSaved()
     } catch (addError) {
-      setError(apiErrorMessage(addError, 'Unable to add columns.'))
+      setError(apiErrorMessage(addError, 'Unable to add output columns.'))
     } finally {
       setAdding(false)
     }
   }
 
+  const busy = adding || primarySaving
+  const draftPrimary = primarySelection.source === 'draft' ? drafts.find((draft) => draft.id === primarySelection.id) : undefined
+
   return (
-    <details className="club-columns" ref={detailsRef}>
-      <summary>
-        Master columns
-        {namesLocked ? ' · names locked' : ' · editable until the first file'}
-      </summary>
+    <div className="club-format">
       <p className="club-muted">
-        {namesLocked
-          ? 'Column names stay as they were on the first file. You can still change the type and whether a column is required.'
-          : 'Add columns now, or leave this empty and let the first uploaded file create them.'}
+        Uploading a file does not add columns. You can add columns after files have been processed. Older merged rows
+        stay blank for a new column, and those files do not need to be processed again.
       </p>
+      <p className="club-muted">One column can be primary. Later files must use a unique value in that column.</p>
       {error && <p className="form-error">{error}</p>}
+      {columns.length === 0 && drafts.length === 0 && (
+        <p className="club-muted">No output columns yet. Add them here, or add them when you match a file.</p>
+      )}
 
-      {columns.length === 0 && namesLocked && <p className="club-muted">No columns yet.</p>}
-
-      {columns.map((column) => (
-        <ColumnRow
-          key={column.id}
-          taskId={task.id}
-          column={column}
-          namesLocked={namesLocked}
-          onSaved={onSaved}
-        />
-      ))}
-
-      {!namesLocked &&
-        drafts.map((draft) => (
-          <div key={draft.id} className="club-column-row">
-            <label className="form-field">
-              <span>Label</span>
-              <input
-                value={draft.label}
-                onChange={(event) =>
-                  setDrafts((current) =>
-                    current.map((item) =>
-                      item.id === draft.id ? { ...item, label: event.target.value } : item,
-                    ),
-                  )
-                }
-              />
-            </label>
-            <TypeField
-              value={draft.dataType}
-              onChange={(dataType) =>
-                setDrafts((current) =>
-                  current.map((item) => (item.id === draft.id ? { ...item, dataType } : item)),
-                )
-              }
+      {(columns.length > 0 || drafts.length > 0) && (
+        <div role="radiogroup" aria-label="Primary column">
+          <label className="checkbox-field club-primary-none">
+            <input
+              type="radio"
+              name={primaryName}
+              checked={noneIsPrimary()}
+              disabled={busy}
+              onChange={() => chooseNoPrimary()}
             />
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={draft.required}
-                onChange={(event) =>
+            No primary column
+          </label>
+
+          {columns.map((column) => (
+            <ColumnRow
+              key={column.id}
+              taskId={task.id}
+              column={column}
+              primaryName={primaryName}
+              primaryChecked={columnIsPrimary(column)}
+              primaryDisabled={busy}
+              onPrimary={() => chooseColumnPrimary(column)}
+              onSaved={onSaved}
+            />
+          ))}
+
+          {drafts.map((draft) => (
+            <div key={draft.id} className="club-column-row">
+              <label className="form-field">
+                <span>
+                  Name
+                  {draftPrimary?.id === draft.id && <span className="club-primary-badge">Primary</span>}
+                </span>
+                <input
+                  value={draft.label}
+                  onChange={(event) =>
+                    setDrafts((current) =>
+                      current.map((item) =>
+                        item.id === draft.id ? { ...item, label: event.target.value } : item,
+                      ),
+                    )
+                  }
+                />
+              </label>
+              <TypeField
+                value={draft.dataType}
+                onChange={(dataType) =>
                   setDrafts((current) =>
-                    current.map((item) =>
-                      item.id === draft.id ? { ...item, required: event.target.checked } : item,
-                    ),
+                    current.map((item) => (item.id === draft.id ? { ...item, dataType } : item)),
                   )
                 }
               />
-              Required
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary btn-compact"
-              onClick={() => setDrafts((current) => current.filter((item) => item.id !== draft.id))}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-
-      {!namesLocked && (
-        <div className="club-inline-actions club-column-actions">
-          <button
-            type="button"
-            className="btn btn-secondary btn-compact"
-            onClick={() => setDrafts((current) => [...current, emptyDraft()])}
-            disabled={adding}
-          >
-            Add column
-          </button>
-          {drafts.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-primary btn-compact"
-              onClick={() => void addColumns()}
-              disabled={adding}
-            >
-              {adding ? 'Saving…' : 'Save new columns'}
-            </button>
-          )}
+              <div className="club-column-flags">
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={draft.required}
+                    onChange={(event) =>
+                      setDrafts((current) =>
+                        current.map((item) =>
+                          item.id === draft.id ? { ...item, required: event.target.checked } : item,
+                        ),
+                      )
+                    }
+                  />
+                  Required
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="radio"
+                    name={primaryName}
+                    checked={draftPrimary?.id === draft.id}
+                    disabled={busy}
+                    onChange={() => chooseDraftPrimary(draft.id)}
+                  />
+                  Set as primary
+                </label>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-compact"
+                onClick={() => {
+                  setDrafts((current) => current.filter((item) => item.id !== draft.id))
+                  if (primarySelection.source === 'draft' && primarySelection.id === draft.id) {
+                    setPrimarySelection({ source: 'server' })
+                  }
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
         </div>
       )}
-    </details>
+
+      {draftPrimary && serverPrimary && (
+        <p className="club-muted">
+          Saving output columns will make this the primary column instead of {serverPrimary.label}.
+        </p>
+      )}
+
+      <div className="club-inline-actions club-column-actions">
+        <button
+          type="button"
+          className="btn btn-secondary btn-compact"
+          onClick={() => setDrafts((current) => [...current, emptyDraft()])}
+          disabled={busy}
+        >
+          Add output column
+        </button>
+        {drafts.length > 0 && (
+          <button
+            type="button"
+            className="btn btn-primary btn-compact"
+            onClick={() => void addColumns()}
+            disabled={busy}
+          >
+            {adding ? 'Saving…' : 'Save output columns'}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -217,12 +320,18 @@ function TypeField({
 function ColumnRow({
   taskId,
   column,
-  namesLocked,
+  primaryName,
+  primaryChecked,
+  primaryDisabled,
+  onPrimary,
   onSaved,
 }: {
   taskId: string
   column: ExcelMergeColumn
-  namesLocked: boolean
+  primaryName: string
+  primaryChecked: boolean
+  primaryDisabled: boolean
+  onPrimary: () => void
   onSaved: () => Promise<void>
 }) {
   const [label, setLabel] = useState(column.label)
@@ -245,25 +354,18 @@ function ColumnRow({
       return
     }
     const nextLabel = label.trim()
-    if (!namesLocked && !nextLabel) {
-      setError('Enter a column label.')
+    if (!nextLabel) {
+      setError('Enter a name for this output column.')
       return
     }
 
     setSaving(true)
     setError('')
     try {
-      await updateExcelMergeColumn(
-        taskId,
-        column.id,
-        namesLocked
-          ? { dataType, required }
-          : { label: nextLabel, dataType, required },
-        token,
-      )
+      await updateExcelMergeColumn(taskId, column.id, { label: nextLabel, dataType, required }, token)
       await onSaved()
     } catch (saveError) {
-      setError(apiErrorMessage(saveError, 'Unable to update this column.'))
+      setError(apiErrorMessage(saveError, 'Unable to update this output column.'))
     } finally {
       setSaving(false)
     }
@@ -281,55 +383,63 @@ function ColumnRow({
       await deleteExcelMergeColumn(taskId, column.id, token)
       await onSaved()
     } catch (deleteError) {
-      setError(apiErrorMessage(deleteError, 'Unable to delete this column.'))
+      setError(apiErrorMessage(deleteError, 'Unable to remove this output column.'))
       setSaving(false)
     }
   }
 
   return (
     <div className="club-column-row">
-      {namesLocked ? (
-        <p className="club-column-label">
-          {column.label}
-          <span className="club-muted">{column.key}</span>
-        </p>
-      ) : (
-        <label className="form-field">
-          <span>Label</span>
-          <input value={label} onChange={(event) => setLabel(event.target.value)} disabled={saving} />
-        </label>
-      )}
-      <TypeField value={dataType} onChange={setDataType} disabled={saving} />
-      <label className="checkbox-field">
-        <input
-          type="checkbox"
-          checked={required}
-          disabled={saving}
-          onChange={(event) => setRequired(event.target.checked)}
-        />
-        Required
+      <label className="form-field">
+        <span>
+          Name
+          {primaryChecked && <span className="club-primary-badge">Primary</span>}
+        </span>
+        <input value={label} onChange={(event) => setLabel(event.target.value)} disabled={saving} />
       </label>
+      <TypeField value={dataType} onChange={setDataType} disabled={saving} />
+      <div className="club-column-flags">
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={required}
+            disabled={saving}
+            onChange={(event) => setRequired(event.target.checked)}
+          />
+          Required
+        </label>
+        <label className="checkbox-field">
+          <input
+            type="radio"
+            name={primaryName}
+            checked={primaryChecked}
+            disabled={primaryDisabled || saving}
+            onChange={onPrimary}
+          />
+          Set as primary
+        </label>
+      </div>
       <div className="club-inline-actions">
         <button type="button" className="btn btn-secondary btn-compact" onClick={() => void save()} disabled={saving}>
           {saving ? 'Saving…' : 'Save'}
         </button>
-        {!namesLocked && !confirmDelete && (
+        {!confirmDelete && (
           <button
             type="button"
             className="btn btn-secondary btn-compact"
             onClick={() => setConfirmDelete(true)}
             disabled={saving}
           >
-            Delete
+            Remove
           </button>
         )}
-        {!namesLocked && confirmDelete && (
+        {confirmDelete && (
           <button type="button" className="btn btn-unable btn-compact" onClick={() => void remove()} disabled={saving}>
-            Confirm delete
+            Confirm remove
           </button>
         )}
       </div>
-      {error && <p className="form-error span-2">{error}</p>}
+      {error && <p className="form-error">{error}</p>}
     </div>
   )
 }

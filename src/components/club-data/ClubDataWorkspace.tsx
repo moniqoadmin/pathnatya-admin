@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react'
+import { type FormEvent, type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react'
 import {
   deleteExcelMergeTask,
   downloadExcelMergeErrors,
@@ -11,15 +11,18 @@ import Modal from '../Modal'
 import { getToken } from '../../lib/session'
 import ColumnEditor from './ColumnEditor'
 import DataTab from './DataTab'
+import Drawer from './Drawer'
 import ErrorsTab from './ErrorsTab'
 import FilesTab from './FilesTab'
 import MappingTab from './MappingTab'
 import { apiErrorMessage } from './format'
+import { openFinalData } from '../../lib/final-data'
+import SummaryJsonDialog from './SummaryJsonDialog'
 import { type ClubTab } from './tabs'
 
 const TABS: { id: ClubTab; label: string }[] = [
   { id: 'files', label: 'Files' },
-  { id: 'mapping', label: 'Mapping' },
+  { id: 'mapping', label: 'Match Columns' },
   { id: 'data', label: 'Data' },
   { id: 'errors', label: 'Errors' },
 ]
@@ -44,12 +47,17 @@ export default function ClubDataWorkspace({
   const [error, setError] = useState('')
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [renameOpen, setRenameOpen] = useState(false)
+  const [summaryOpen, setSummaryOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
   const [dialogError, setDialogError] = useState('')
   const [downloadKind, setDownloadKind] = useState<'data' | 'errors' | ''>('')
+  const [menu, setMenu] = useState<'edit' | 'download' | null>(null)
+  const [formatOpen, setFormatOpen] = useState(false)
+  const formatPrompted = useRef('')
+  const closeMenu = useCallback(() => setMenu(null), [])
 
   const refreshTask = useCallback(async () => {
     const token = getToken()
@@ -81,6 +89,14 @@ export default function ClubDataWorkspace({
       cancelled = true
     }
   }, [refreshTask])
+
+  useEffect(() => {
+    if (!task || formatPrompted.current === task.id) {
+      return
+    }
+    formatPrompted.current = task.id
+    setFormatOpen(task.columns.length === 0)
+  }, [task])
 
   function showNotice(kind: 'success' | 'error', text: string) {
     setNotice({ kind, text })
@@ -182,81 +198,142 @@ export default function ClubDataWorkspace({
     data: task.validCount,
     errors: task.pendingErrorCount,
   }
+  const outputCount = task.columns.length || task.columnCount
+  const primaryColumn = task.columns.find((column) => column.primary)
 
   return (
     <div className="page-panel club-data-page">
-      <div className="page-header">
-        <div className="page-header-copy">
-          <button type="button" className="btn btn-secondary btn-compact club-back" onClick={onBack}>
+      <div className="club-task-header">
+        <div className="club-task-toolbar">
+          <button type="button" className="btn btn-secondary btn-compact" onClick={onBack}>
             All tasks
           </button>
+          <div className="page-actions club-data-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => openFinalData(task.id)}>
+              View final data
+            </button>
+          <ActionMenu
+            label="Edit"
+            open={menu === 'edit'}
+            onToggle={() => setMenu((current) => (current === 'edit' ? null : 'edit'))}
+            onClose={closeMenu}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="club-menu-item"
+              onClick={() => {
+                closeMenu()
+                setName(task.name)
+                setDescription(task.description ?? '')
+                setDialogError('')
+                setRenameOpen(true)
+              }}
+            >
+              Rename
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="club-menu-item"
+              onClick={() => {
+                closeMenu()
+                setSummaryOpen(true)
+              }}
+            >
+              Summary
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="club-menu-item is-danger"
+              onClick={() => {
+                closeMenu()
+                setDialogError('')
+                setDeleteOpen(true)
+              }}
+            >
+              Delete
+            </button>
+          </ActionMenu>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            aria-expanded={formatOpen}
+            onClick={() => setFormatOpen((open) => !open)}
+          >
+            Output format{outputCount > 0 ? ` · ${outputCount}` : ''}
+          </button>
+          <ActionMenu
+            label={downloadKind ? 'Downloading…' : 'Download'}
+            primary
+            open={menu === 'download'}
+            disabled={downloadKind !== ''}
+            onToggle={() => setMenu((current) => (current === 'download' ? null : 'download'))}
+            onClose={closeMenu}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="club-menu-item"
+              disabled={task.validCount === 0}
+              title={
+                task.validCount === 0
+                  ? 'No valid rows to download yet'
+                  : 'Download valid rows in the current output-column order'
+              }
+              onClick={() => {
+                closeMenu()
+                void download('data')
+              }}
+            >
+              Excel
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="club-menu-item"
+              disabled={task.pendingErrorCount === 0}
+              title={task.pendingErrorCount === 0 ? 'No errors to download' : 'Download error rows'}
+              onClick={() => {
+                closeMenu()
+                void download('errors')
+              }}
+            >
+              Errors
+            </button>
+          </ActionMenu>
+          </div>
+        </div>
+        <div className="page-header-copy">
           <p className="eyebrow">Club data</p>
           <h1>{task.name}</h1>
           <p className="page-subtitle">
             {task.description?.trim() ||
-              'Upload Excel files, map their columns, correct errors, and download one combined sheet.'}
+              'Upload files, match columns, then process them into one Excel file.'}
           </p>
-        </div>
-        <div className="page-actions club-data-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              setName(task.name)
-              setDescription(task.description ?? '')
-              setDialogError('')
-              setRenameOpen(true)
-            }}
-          >
-            Rename
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              setDialogError('')
-              setDeleteOpen(true)
-            }}
-          >
-            Delete
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={downloadKind !== '' || task.validCount === 0}
-            title={task.validCount === 0 ? 'No valid rows to download yet' : 'Download combined Excel'}
-            onClick={() => void download('data')}
-          >
-            {downloadKind === 'data' ? 'Downloading…' : 'Download Excel'}
-          </button>
-          {task.pendingErrorCount > 0 && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={downloadKind !== ''}
-              onClick={() => void download('errors')}
-            >
-              {downloadKind === 'errors' ? 'Downloading…' : 'Download errors'}
-            </button>
-          )}
+          <ul className="club-stats">
+            <li>
+              <strong>{task.fileCount.toLocaleString()}</strong> {task.fileCount === 1 ? 'File' : 'Files'}
+            </li>
+            <li>
+              <strong>{task.validCount.toLocaleString()}</strong> Valid {task.validCount === 1 ? 'Row' : 'Rows'}
+            </li>
+            <li>
+              <strong>{task.pendingErrorCount.toLocaleString()}</strong>{' '}
+              {task.pendingErrorCount === 1 ? 'Error' : 'Errors'}
+            </li>
+            <li>
+              <strong>{outputCount.toLocaleString()}</strong> Output {outputCount === 1 ? 'Column' : 'Columns'}
+            </li>
+            {primaryColumn && (
+              <li>
+                Primary <strong>{primaryColumn.label}</strong>
+              </li>
+            )}
+          </ul>
         </div>
       </div>
-
-      <ul className="club-stats">
-        <li>
-          <strong>{task.fileCount}</strong> files
-        </li>
-        <li>
-          <strong>{task.validCount}</strong> valid
-        </li>
-        <li>
-          <strong>{task.pendingErrorCount}</strong> pending errors
-        </li>
-        <li>{task.schemaFrozen ? 'Columns locked' : 'Columns editable'}</li>
-      </ul>
-      {task.validCount === 0 && (
-        <p className="club-muted">Combined download stays off until this task has valid rows.</p>
-      )}
 
       {notice && (
         <div className={`club-notice ${notice.kind === 'error' ? 'form-error' : 'form-success'}`} role="status">
@@ -267,7 +344,17 @@ export default function ClubDataWorkspace({
         </div>
       )}
 
-      <ColumnEditor task={task} onSaved={refreshTask} />
+      {formatOpen && (
+        <Drawer
+          title={outputCount > 0 ? `Output format · ${outputCount}` : 'Output format'}
+          description="These columns are the output format for the combined Excel file."
+          labelledBy="club-output-format-title"
+          wide
+          onClose={() => setFormatOpen(false)}
+        >
+          <ColumnEditor task={task} onSaved={refreshTask} />
+        </Drawer>
+      )}
 
       <div className="creation-tabs club-data-tabs" role="tablist" aria-label="Club data workspace">
         {TABS.map((item) => (
@@ -312,7 +399,7 @@ export default function ClubDataWorkspace({
       {renameOpen && (
         <Modal
           title="Rename task"
-          description="The name is only a label. Column names stay with the uploaded files."
+          description="This only changes the task name."
           labelledBy="club-rename-title"
           busy={saving}
           onClose={() => setRenameOpen(false)}
@@ -345,6 +432,18 @@ export default function ClubDataWorkspace({
         </Modal>
       )}
 
+      {summaryOpen && (
+        <SummaryJsonDialog
+          taskId={task.id}
+          taskName={task.name}
+          onClose={() => setSummaryOpen(false)}
+          onSaved={() => {
+            setSummaryOpen(false)
+            showNotice('success', 'Summary saved.')
+          }}
+        />
+      )}
+
       {deleteOpen && (
         <Modal
           title="Delete task"
@@ -368,5 +467,78 @@ export default function ClubDataWorkspace({
         </Modal>
       )}
     </div>
+  )
+}
+
+function ActionMenu({
+  label,
+  open,
+  disabled = false,
+  primary = false,
+  onToggle,
+  onClose,
+  children,
+}: {
+  label: ReactNode
+  open: boolean
+  disabled?: boolean
+  primary?: boolean
+  onToggle: () => void
+  onClose: () => void
+  children: ReactNode
+}) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const menuId = useId()
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        onClose()
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open, onClose])
+
+  return (
+    <div className="club-menu" ref={rootRef}>
+      <button
+        type="button"
+        className={`btn ${primary ? 'btn-primary' : 'btn-secondary'}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        disabled={disabled}
+        onClick={onToggle}
+      >
+        {label}
+        <Caret open={open} />
+      </button>
+      {open && (
+        <div className="club-menu-panel" id={menuId} role="menu">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Caret({ open }: { open: boolean }) {
+  return (
+    <svg className={`club-menu-caret${open ? ' is-open' : ''}`} width="12" height="8" viewBox="0 0 12 8" aria-hidden="true">
+      <path fill="currentColor" d="M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z" />
+    </svg>
   )
 }

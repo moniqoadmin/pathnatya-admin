@@ -3,6 +3,8 @@ import {
   confirmExcelMergeMapping,
   getExcelMergeFile,
   listExcelMergeFiles,
+  toExcelDataType,
+  type ExcelDataType,
   type ExcelMergeFileDetail,
   type ExcelMergeFileSummary,
   type ExcelMergeMappingEntry,
@@ -16,11 +18,15 @@ const IGNORE = '__ignore__'
 const CREATE = '__create__'
 
 interface MappingRow {
+  id: string
   sourceHeader: string
   sample: string
-  inferredType: string
   choice: string
   reason: string
+  label: string
+  dataType: ExcelDataType
+  required: boolean
+  primary: boolean
 }
 
 interface MappingTabProps {
@@ -32,50 +38,80 @@ interface MappingTabProps {
 }
 
 function choiceFromSuggestion(suggestion: ExcelSuggestedMapping | undefined): string {
-  if (!suggestion || suggestion.action === 'unmapped') {
-    return ''
-  }
-  if (suggestion.action === 'ignore') {
+  if (suggestion?.action === 'ignore') {
     return IGNORE
   }
-  if (suggestion.action === 'create') {
-    return CREATE
+  if (
+    suggestion?.columnKey &&
+    (suggestion.action === 'map' || suggestion.reason === 'name_match' || suggestion.reason === 'saved')
+  ) {
+    return suggestion.columnKey
   }
-  return suggestion.columnKey || ''
+  return CREATE
+}
+
+function rowFromSource(
+  header: string,
+  index: number,
+  sample: string,
+  inferredType: unknown,
+  suggestion: ExcelSuggestedMapping | undefined,
+): MappingRow {
+  const choice = choiceFromSuggestion(suggestion)
+  const suggestedLabel = suggestion?.label?.trim() || suggestion?.columnLabel?.trim() || ''
+  return {
+    id: `${index}:${header}`,
+    sourceHeader: header,
+    sample,
+    choice,
+    reason: suggestion?.reason ?? (suggestion?.action === 'unmapped' ? 'unmapped' : ''),
+    label: suggestedLabel || header,
+    dataType: toExcelDataType(suggestion?.dataType ?? inferredType),
+    required: suggestion?.required === true,
+    primary: choice === CREATE && suggestion?.primary === true,
+  }
 }
 
 function buildRows(file: ExcelMergeFileDetail): MappingRow[] {
   const suggestionList = Array.isArray(file.suggestedMappings) ? file.suggestedMappings : []
-  const suggestions = new Map(suggestionList.map((item) => [item.sourceHeader, item] as const))
+  const byHeader = new Map(suggestionList.map((item) => [item.sourceHeader, item] as const))
   const analyzed = Array.isArray(file.analysis?.columns) ? file.analysis.columns : []
-  if (analyzed.length > 0) {
-    return analyzed.map((column) => {
-      const suggestion = suggestions.get(column.header)
-      return {
-        sourceHeader: column.header,
-        sample: (column.sampleValues ?? []).filter(Boolean).slice(0, 3).join(', '),
-        inferredType: column.inferredType ?? '',
-        choice: choiceFromSuggestion(suggestion),
-        reason: suggestion?.reason ?? '',
-      }
-    })
-  }
+  const rows =
+    analyzed.length > 0
+      ? analyzed.map((column, index) => {
+          const suggestion =
+            byHeader.get(column.header) ?? suggestionList.find((item) => item.sourceIndex === column.index)
+          const sample = (column.sampleValues ?? []).filter(Boolean).slice(0, 3).join(', ')
+          return rowFromSource(column.header, index, sample, column.inferredType, suggestion)
+        })
+      : suggestionList.map((suggestion, index) =>
+          rowFromSource(suggestion.sourceHeader, index, '', undefined, suggestion),
+        )
 
-  return suggestionList.map((suggestion) => ({
-    sourceHeader: suggestion.sourceHeader,
-    sample: '',
-    inferredType: '',
-    choice: choiceFromSuggestion(suggestion),
-    reason: suggestion.reason ?? '',
-  }))
+  let primaryTaken = false
+  return rows.map((row) => {
+    if (!row.primary) {
+      return row
+    }
+    if (primaryTaken) {
+      return { ...row, primary: false }
+    }
+    primaryTaken = true
+    return row
+  })
 }
 
-function rowsForTask(file: ExcelMergeFileDetail, frozen: boolean): MappingRow[] {
-  const next = buildRows(file)
-  if (!frozen) {
-    return next
+function mappingHint(row: MappingRow): string {
+  if (!row.choice) {
+    return ''
   }
-  return next.map((row) => (row.choice === CREATE ? { ...row, choice: '' } : row))
+  if (row.reason === 'saved') {
+    return 'Previous choice for this column.'
+  }
+  if (row.reason === 'name_match') {
+    return 'Matched an output column with the same name.'
+  }
+  return ''
 }
 
 export default function MappingTab({
@@ -86,7 +122,6 @@ export default function MappingTab({
   onTaskRefresh,
 }: MappingTabProps) {
   const columns = sortedColumns(task.columns)
-  const namesLocked = task.schemaFrozen
   const [options, setOptions] = useState<ExcelMergeFileSummary[]>([])
   const [detail, setDetail] = useState<ExcelMergeFileDetail | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -132,7 +167,6 @@ export default function MappingTab({
     let cancelled = false
     setLoading(true)
     setError('')
-    setStatus('')
 
     void getExcelMergeFile(task.id, fileId, token)
       .then((file) => {
@@ -142,7 +176,7 @@ export default function MappingTab({
         setDetail(file)
         setSheetName(file.analysis?.selectedSheet || file.selectedSheet || file.sheetNames?.[0] || '')
         setHeaderRow(String(file.analysis?.headerRow || file.headerRow || 1))
-        setRows(rowsForTask(file, task.schemaFrozen))
+        setRows(buildRows(file))
       })
       .catch((loadError) => {
         if (!cancelled) {
@@ -159,7 +193,7 @@ export default function MappingTab({
     return () => {
       cancelled = true
     }
-  }, [task.id, task.schemaFrozen, fileId, reloadKey])
+  }, [task.id, fileId, reloadKey])
 
   useEffect(() => {
     if (!detail || (detail.status !== 'processing' && detail.status !== 'uploaded')) {
@@ -172,6 +206,7 @@ export default function MappingTab({
   const sheets = detail?.analysis?.sheets ?? []
   const review = useMemo(() => reviewLines(detail?.review), [detail])
   const mappable = options.filter((file) => file.status !== 'failed')
+  const existingPrimary = columns.find((column) => column.primary)
 
   function applySheet(nextSheet: string) {
     setSheetName(nextSheet)
@@ -179,6 +214,10 @@ export default function MappingTab({
     if (sheet?.headerRow) {
       setHeaderRow(String(sheet.headerRow))
     }
+  }
+
+  function updateRow(id: string, patch: Partial<MappingRow>) {
+    setRows((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
   }
 
   async function submit(process: boolean) {
@@ -206,7 +245,7 @@ export default function MappingTab({
       return
     }
     if (rows.some((row) => !row.choice)) {
-      setError('Choose a master column or Ignore for every uploaded column.')
+      setError('Choose Map, Add to Output, or Ignore for every Excel column.')
       return
     }
 
@@ -217,10 +256,16 @@ export default function MappingTab({
       }
       if (used.has(row.choice)) {
         const label = columns.find((column) => column.key === row.choice)?.label ?? row.choice
-        setError(`Two uploaded columns cannot map to ${label}.`)
+        setError(`Two Excel columns cannot use the same output column (${label}).`)
         return
       }
       used.add(row.choice)
+    }
+
+    const primaryCreates = rows.filter((row) => row.choice === CREATE && row.primary)
+    if (primaryCreates.length > 1) {
+      setError('Only one new output column can be primary.')
+      return
     }
 
     const mappings: ExcelMergeMappingEntry[] = rows.map((row) => {
@@ -228,7 +273,15 @@ export default function MappingTab({
         return { sourceHeader: row.sourceHeader, action: 'ignore' }
       }
       if (row.choice === CREATE) {
-        return { sourceHeader: row.sourceHeader, action: 'create' }
+        const label = row.label.trim()
+        return {
+          sourceHeader: row.sourceHeader,
+          action: 'create',
+          ...(label ? { label } : {}),
+          dataType: row.dataType,
+          required: row.required,
+          ...(row.primary ? { primary: true } : {}),
+        }
       }
       return { sourceHeader: row.sourceHeader, action: 'map', columnKey: row.choice }
     })
@@ -244,9 +297,9 @@ export default function MappingTab({
         token,
       )
       setDetail(file)
-      setRows(rowsForTask(file, namesLocked))
-      setReloadKey((current) => current + 1)
+      setRows(buildRows(file))
       await onTaskRefresh()
+      setReloadKey((current) => current + 1)
       if (file.status === 'failed') {
         setError(file.failureMessage || 'Processing failed.')
         return
@@ -254,7 +307,7 @@ export default function MappingTab({
       setStatus(
         process
           ? `Processed ${file.fileName}: ${file.validCount} valid, ${file.errorCount} errors.`
-          : 'Mapping saved. Process the file when you are ready.',
+          : 'Column matching saved. New output columns are available now. Process this file when you are ready.',
       )
     } catch (saveError) {
       setError(apiErrorMessage(saveError, 'Unable to save this mapping.'))
@@ -289,7 +342,7 @@ export default function MappingTab({
         </label>
       </div>
 
-      {!fileId && <p className="club-muted">Choose an analyzed file to map its columns.</p>}
+      {!fileId && <p className="club-muted">Choose a file to match its columns.</p>}
       {loading && <p className="club-muted">Loading file…</p>}
       {error && <p className="form-error">{error}</p>}
       {status && <p className="form-success">{status}</p>}
@@ -309,7 +362,7 @@ export default function MappingTab({
 
           {review.length > 0 && (
             <div className="club-review">
-              <strong>Saved mapping</strong>
+              <strong>Saved matching</strong>
               <ul>
                 {review.map((line) => (
                   <li key={line}>{line}</li>
@@ -347,66 +400,132 @@ export default function MappingTab({
                 </label>
               </div>
 
+              <p className="club-expected">
+                Each Excel column starts as Add to output. Map it to an existing column, or ignore it. A saved match or
+                an exact name still uses that output column. Adding a column updates the output format immediately.
+                Set the column type from the output format. Older merged rows stay blank for that column.
+              </p>
+
               {rows.length === 0 ? (
                 <p className="club-muted">No columns were detected in this file.</p>
               ) : (
-                <div className="users-table-wrap">
-                  <table className="users-table club-mapping-table">
-                    <thead>
-                      <tr>
-                        <th>Uploaded column</th>
-                        <th>Sample</th>
-                        <th>Master column</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row) => (
-                        <tr key={row.sourceHeader}>
-                          <td>
-                            <span className="club-task-name">{row.sourceHeader}</span>
-                            {row.inferredType && <span className="club-muted">{row.inferredType}</span>}
-                          </td>
-                          <td>{row.sample || '—'}</td>
-                          <td>
-                            <select
-                              aria-label={`Map ${row.sourceHeader}`}
-                              value={row.choice}
-                              disabled={busy}
-                              onChange={(event) =>
-                                setRows((current) =>
-                                  current.map((item) =>
-                                    item.sourceHeader === row.sourceHeader
-                                      ? { ...item, choice: event.target.value }
-                                      : item,
-                                  ),
-                                )
-                              }
-                            >
-                              <option value="">Choose a column</option>
+                <div className="club-match-list">
+                  <div className="club-match-head">
+                    <span>Excel column</span>
+                    <span className="club-match-arrow" aria-hidden="true" />
+                    <span>Output</span>
+                  </div>
+                  {rows.map((row) => {
+                    const output = columns.find((column) => column.key === row.choice)
+                    const hint = mappingHint(row)
+                    return (
+                      <div className="club-match-row" key={row.id}>
+                        <div>
+                          <span className="club-task-name">{row.sourceHeader}</span>
+                          {row.sample && <span className="club-muted">{row.sample}</span>}
+                          {hint && <span className="club-reason">{hint}</span>}
+                        </div>
+                        <span className="club-match-arrow" aria-hidden="true">
+                          →
+                        </span>
+                        <div className="club-match-output">
+                          <select
+                            aria-label={`Output for ${row.sourceHeader}`}
+                            value={row.choice}
+                            disabled={busy}
+                            onChange={(event) => {
+                              const choice = event.target.value
+                              updateRow(row.id, {
+                                choice,
+                                label: choice === CREATE && !row.label.trim() ? row.sourceHeader : row.label,
+                                primary: choice === CREATE ? row.primary : false,
+                              })
+                            }}
+                          >
+                            <option value="">Choose an action</option>
+                            <optgroup label="Map">
+                              {columns.length === 0 && (
+                                <option value="__none__" disabled>
+                                  No output columns yet
+                                </option>
+                              )}
                               {row.choice &&
                                 row.choice !== IGNORE &&
                                 row.choice !== CREATE &&
-                                !columns.some((column) => column.key === row.choice) && (
-                                  <option value={row.choice}>{row.choice}</option>
-                                )}
+                                !output && <option value={row.choice}>{row.choice}</option>}
                               {columns.map((column) => (
                                 <option key={column.key} value={column.key}>
                                   {column.label}
-                                  {column.required ? ' · required' : ''}
+                                  {column.primary ? ' (primary)' : ''}
                                 </option>
                               ))}
-                              {!namesLocked && <option value={CREATE}>Create new column</option>}
+                            </optgroup>
+                            <optgroup label="Add to Output">
+                              <option value={CREATE}>Add “{row.sourceHeader}” to output</option>
+                            </optgroup>
+                            <optgroup label="Ignore">
                               <option value={IGNORE}>Ignore</option>
-                            </select>
-                            {row.reason === 'saved' && <span className="club-muted">Used before</span>}
-                            {row.reason === 'name_match' && row.choice && (
-                              <span className="club-muted">Name match</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            </optgroup>
+                          </select>
+                          {row.choice === CREATE && (
+                            <div className="club-create-options">
+                              <span className="club-new-output">New output column</span>
+                              <label className="form-field">
+                                <span>Output name</span>
+                                <input
+                                  aria-label={`Output name for ${row.sourceHeader}`}
+                                  value={row.label}
+                                  placeholder={row.sourceHeader}
+                                  disabled={busy}
+                                  onChange={(event) => updateRow(row.id, { label: event.target.value })}
+                                />
+                              </label>
+                              <label className="checkbox-field">
+                                <input
+                                  type="checkbox"
+                                  checked={row.required}
+                                  disabled={busy}
+                                  onChange={(event) => updateRow(row.id, { required: event.target.checked })}
+                                />
+                                Required
+                              </label>
+                              <label className="checkbox-field">
+                                <input
+                                  type="checkbox"
+                                  checked={row.primary}
+                                  disabled={busy}
+                                  onChange={(event) => {
+                                    const primary = event.target.checked
+                                    setRows((current) =>
+                                      current.map((item) => ({
+                                        ...item,
+                                        primary: item.id === row.id ? primary : primary ? false : item.primary,
+                                      })),
+                                    )
+                                  }}
+                                />
+                                Set as primary
+                              </label>
+                              {row.primary && existingPrimary && (
+                                <p className="club-muted">
+                                  This replaces {existingPrimary.label} as the primary column.
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {row.choice === IGNORE && (
+                            <span className="club-muted">This Excel column will not be included</span>
+                          )}
+                          {output && (
+                            <span className="club-muted">
+                              Maps to {output.label}
+                              {output.primary ? ' · primary column' : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 
@@ -417,7 +536,7 @@ export default function MappingTab({
                   disabled={busy || rows.length === 0}
                   onClick={() => void submit(false)}
                 >
-                  {saving === 'save' ? 'Saving…' : 'Save mapping'}
+                  {saving === 'save' ? 'Saving…' : 'Save matching'}
                 </button>
                 <button
                   type="button"
@@ -425,7 +544,7 @@ export default function MappingTab({
                   disabled={busy || rows.length === 0}
                   onClick={() => void submit(true)}
                 >
-                  {saving === 'process' ? 'Processing…' : 'Confirm and process'}
+                  {saving === 'process' ? 'Processing…' : 'Process'}
                 </button>
                 {detail.errorCount > 0 && (
                   <button type="button" className="btn btn-secondary" onClick={() => onOpenTab('errors')}>

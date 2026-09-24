@@ -13,14 +13,7 @@ import {
 } from '../../api/excel-merge'
 import { getToken } from '../../lib/session'
 import Pager from './Pager'
-import {
-  apiErrorMessage,
-  fileStatusLabel,
-  formatBytes,
-  formatDate,
-  isExcelFile,
-  statusPillClass,
-} from './format'
+import { apiErrorMessage, fileStatusLabel, fileStep, formatBytes, formatDate, isExcelFile, sortedColumns } from './format'
 
 const PAGE_SIZE = 20
 
@@ -44,10 +37,9 @@ export default function FilesTab({ task, onTaskRefresh, onOpenMapping, onNotice 
   const [uploading, setUploading] = useState(false)
   const [processingId, setProcessingId] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const expected = task.frozenHeaders.length
-    ? task.frozenHeaders
-    : task.columns.map((column) => column.label)
+  const outputNames = sortedColumns(task.columns).map((column) =>
+    column.primary ? `${column.label} (primary)` : column.label,
+  )
 
   useEffect(() => {
     const token = getToken()
@@ -165,14 +157,14 @@ export default function FilesTab({ task, onTaskRefresh, onOpenMapping, onNotice 
       }
 
       if (result.files.length === 1 && result.files[0]?.status === 'analyzed') {
-        onNotice('success', `${result.files[0].fileName} is ready to map.`)
+        onNotice('success', `${result.files[0].fileName} needs column matching.`)
         onOpenMapping(result.files[0].id)
         return
       }
 
       onNotice(
         'success',
-        `Uploaded ${result.files.length} file${result.files.length === 1 ? '' : 's'}. Open mapping for each file that is ready.`,
+        `Uploaded ${result.files.length} file${result.files.length === 1 ? '' : 's'}. Match columns for each file that is ready.`,
       )
     } catch (uploadError) {
       onNotice('error', apiErrorMessage(uploadError, 'Unable to upload those files.'))
@@ -214,9 +206,10 @@ export default function FilesTab({ task, onTaskRefresh, onOpenMapping, onNotice 
       <div className="club-upload-panel">
         <div className="club-upload">
           <p className="club-expected">
-            {task.schemaFrozen
-              ? `Column names are locked. New files must use: ${expected.join(', ') || 'the first file’s headers'}.`
-              : 'The first file locks the column names for every file after it. Same names in a different order are fine.'}
+            Uploading a file only reads it. It does not add output columns. Match each column afterward, including on
+            the first file. New columns can be added to the output later. Rows already merged stay in Data and leave
+            those cells blank.
+            {outputNames.length > 0 ? ` Output format: ${outputNames.join(', ')}.` : ''}
           </p>
           <div className="file-picker">
             <input
@@ -325,16 +318,14 @@ export default function FilesTab({ task, onTaskRefresh, onOpenMapping, onNotice 
           <thead>
             <tr>
               <th>File</th>
-              <th>Status</th>
-              <th>Rows</th>
+              <th>Next step</th>
               <th>Uploaded</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {!loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="users-table-empty">
+                <td colSpan={3} className="users-table-empty">
                   No files uploaded yet.
                 </td>
               </tr>
@@ -353,41 +344,41 @@ export default function FilesTab({ task, onTaskRefresh, onOpenMapping, onNotice 
                     )}
                   </td>
                   <td>
-                    <span className={`status-pill ${statusPillClass(file.status)}`}>
-                      {fileStatusLabel(file.status)}
-                    </span>
-                  </td>
-                  <td>
-                    {file.status === 'processed' || file.validCount > 0 || file.errorCount > 0
-                      ? `${file.validCount} valid · ${file.errorCount} errors`
-                      : '—'}
-                  </td>
-                  <td>{formatDate(file.createdAt)}</td>
-                  <td>
-                    <div className="club-inline-actions">
-                      {(file.status === 'analyzed' ||
-                        file.status === 'mapping_confirmed' ||
-                        file.status === 'processed') && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-compact"
-                          onClick={() => onOpenMapping(file.id)}
-                        >
-                          {file.status === 'analyzed' ? 'Map' : 'Mapping'}
-                        </button>
-                      )}
-                      {file.status === 'mapping_confirmed' && (
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-compact"
-                          onClick={() => void processFile(file.id)}
-                          disabled={processingId === file.id}
-                        >
-                          {processingId === file.id ? 'Processing…' : 'Process'}
-                        </button>
-                      )}
+                    <div className="club-next-step">
+                      <span>{fileStep(file)}</span>
+                      <div className="club-inline-actions">
+                        {file.status === 'analyzed' && (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-compact"
+                            onClick={() => onOpenMapping(file.id)}
+                          >
+                            Match Columns
+                          </button>
+                        )}
+                        {file.status === 'mapping_confirmed' && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-compact"
+                              onClick={() => void processFile(file.id)}
+                              disabled={processingId === file.id}
+                            >
+                              {processingId === file.id ? 'Processing…' : 'Process'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-compact"
+                              onClick={() => onOpenMapping(file.id)}
+                            >
+                              Match Columns
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </td>
+                  <td>{formatDate(file.createdAt)}</td>
                 </tr>
               ))
             )}
